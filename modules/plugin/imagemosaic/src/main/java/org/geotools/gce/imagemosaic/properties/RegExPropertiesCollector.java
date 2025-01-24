@@ -28,31 +28,30 @@ import java.util.regex.Pattern;
 import org.apache.commons.io.FilenameUtils;
 import org.geotools.util.logging.Logging;
 
-public abstract class RegExPropertiesCollector extends PropertiesCollector {
+public abstract class RegExPropertiesCollector extends PropertiesCollector implements FullPathCollector {
 
     private static final Logger LOGGER = Logging.getLogger(RegExPropertiesCollector.class);
 
     private boolean fullPath = false;
 
+    private Pattern pattern;
+
+    @Override
     public boolean isFullPath() {
         return fullPath;
     }
 
+    @Override
     public void setFullPath(boolean fullPath) {
         this.fullPath = fullPath;
     }
 
     public RegExPropertiesCollector(
-            PropertiesCollectorSPI spi,
-            List<String> propertyNames,
-            String regex,
-            boolean fullPath) {
+            PropertiesCollectorSPI spi, List<String> propertyNames, String regex, boolean fullPath) {
         super(spi, propertyNames);
         this.fullPath = fullPath;
         pattern = Pattern.compile(regex);
     }
-
-    private Pattern pattern;
 
     @Override
     public RegExPropertiesCollector collect(File file) {
@@ -111,7 +110,8 @@ public abstract class RegExPropertiesCollector extends PropertiesCollector {
             }
             addMatch(match);
         }
-    };
+    }
+    ;
 
     @Override
     public void setProperties(Map<String, Object> map) {
@@ -121,8 +121,7 @@ public abstract class RegExPropertiesCollector extends PropertiesCollector {
 
         // set the properties, only if we have matches!
         if (matches.isEmpty()) {
-            if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.fine("No matches found for this property extractor:");
+            if (LOGGER.isLoggable(Level.FINE)) LOGGER.fine("No matches found for this property extractor:");
         }
         int index = 0;
         for (String propertyName : getPropertyNames()) {

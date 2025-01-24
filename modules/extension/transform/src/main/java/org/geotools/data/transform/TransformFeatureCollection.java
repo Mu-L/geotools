@@ -17,7 +17,9 @@
 package org.geotools.data.transform;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.geotools.api.data.Query;
@@ -44,6 +46,7 @@ import org.geotools.feature.visitor.MaxVisitor;
 import org.geotools.feature.visitor.MinVisitor;
 import org.geotools.feature.visitor.UniqueVisitor;
 import org.geotools.geometry.jts.ReferencedEnvelope;
+import org.geotools.referencing.CRS;
 import org.geotools.util.logging.Logging;
 
 /**
@@ -61,27 +64,30 @@ class TransformFeatureCollection extends AbstractFeatureCollection {
 
     Query query;
 
-    public TransformFeatureCollection(
-            SimpleFeatureSource source, Transformer transformer, Query query) {
+    public TransformFeatureCollection(SimpleFeatureSource source, Transformer transformer, Query query) {
         super(retypeSchema(source.getSchema(), query));
         this.source = source;
         this.transformer = transformer;
         this.query = query;
     }
 
-    /** Creates a sub-schema with only the selected attributes */
+    /**
+     * Creates a sub-schema with only the selected attributes.
+     *
+     * <p>Transformer is going to trust that the source can handle any reprojection.
+     */
     static SimpleFeatureType retypeSchema(SimpleFeatureType schema, Query query) {
-        if (query.getPropertyNames() == Query.ALL_NAMES) {
+        if (query.getPropertyNames() == Query.ALL_NAMES
+                && CRS.equalsIgnoreMetadata(
+                        schema.getCoordinateReferenceSystem(), query.getCoordinateSystemReproject())) {
             return schema;
         } else {
-            return SimpleFeatureTypeBuilder.retype(schema, query.getPropertyNames());
+            return SimpleFeatureTypeBuilder.retype(schema, query);
         }
     }
 
     @Override
-    @SuppressWarnings({
-        "PMD.CloseResource",
-        "PMD.UseTryWithResources"
+    @SuppressWarnings({"PMD.CloseResource", "PMD.UseTryWithResources"
     }) // convoluted logic, but "fi" is closed or returned
     protected Iterator<SimpleFeature> openIterator() {
         SimpleFeatureIterator fi = null;
@@ -100,13 +106,24 @@ class TransformFeatureCollection extends AbstractFeatureCollection {
 
             // grab the original features
             fi = transformer.getSource().getFeatures(txQuery).features();
-            SimpleFeatureIterator transformed =
-                    new TransformFeatureIteratorWrapper(fi, transformer);
+            Transformer iteratorTransformer = transformer;
+            if (query.getPropertyNames() != Query.ALL_NAMES) {
+                // account for the properties in the query
+                List<Definition> definitions = new ArrayList<>();
+                for (String name : query.getPropertyNames()) {
+                    transformer.getDefinitions().stream()
+                            .filter(d -> d.name.equals(name))
+                            .findFirst()
+                            .ifPresent(definitions::add);
+                }
+                iteratorTransformer =
+                        new Transformer(transformer.getSource(), transformer.getName(), definitions, getSchema());
+            }
+            SimpleFeatureIterator transformed = new TransformFeatureIteratorWrapper(fi, iteratorTransformer);
 
             // see if we have to apply sort
             if (query.getSortBy() != null && txQuery.getSortBy() == null) {
-                transformed =
-                        new SortedFeatureIterator(transformed, getSchema(), query.getSortBy(), -1);
+                transformed = new SortedFeatureIterator(transformed, getSchema(), query.getSortBy(), -1);
             }
 
             // see if we have to apply the offset manually
@@ -123,7 +140,7 @@ class TransformFeatureCollection extends AbstractFeatureCollection {
 
             result = new SimpleFeatureIteratorIterator(transformed);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Transform failure: " + e.getMessage(), e);
         } finally {
             // if result is null, an exception has occurred, close the wrapped iterator
             if (result == null) {
@@ -212,9 +229,9 @@ class TransformFeatureCollection extends AbstractFeatureCollection {
     }
 
     /**
-     * Checks if the visitor is accessing only properties available in the specified feature type,
-     * checks if the target schema contains transformed attributes or as a special case, if it's a
-     * count visitor accessing no properties at all
+     * Checks if the visitor is accessing only properties available in the specified feature type, checks if the target
+     * schema contains transformed attributes or as a special case, if it's a count visitor accessing no properties at
+     * all
      */
     protected boolean isTypeCompatible(FeatureVisitor visitor, SimpleFeatureType featureType) {
         if (visitor instanceof CountVisitor) {
@@ -228,14 +245,11 @@ class TransformFeatureCollection extends AbstractFeatureCollection {
                     return false;
                 }
                 PropertyName externalName = (PropertyName) e;
-                Expression attributeExpression =
-                        transformer.getExpression(externalName.getPropertyName());
+                Expression attributeExpression = transformer.getExpression(externalName.getPropertyName());
                 if (!(attributeExpression instanceof PropertyName)) {
                     return false;
                 }
-                if (!((PropertyName) attributeExpression)
-                        .getPropertyName()
-                        .equals(externalName.getPropertyName())) {
+                if (!((PropertyName) attributeExpression).getPropertyName().equals(externalName.getPropertyName())) {
                     return false;
                 }
             }
@@ -246,29 +260,25 @@ class TransformFeatureCollection extends AbstractFeatureCollection {
 
     @Override
     public void accepts(
-            org.geotools.api.feature.FeatureVisitor visitor,
-            org.geotools.api.util.ProgressListener progress)
+            org.geotools.api.feature.FeatureVisitor visitor, org.geotools.api.util.ProgressListener progress)
             throws IOException {
         if (isTypeCompatible(visitor, transformer.getSchema())) {
             delegateVisitor(visitor, progress);
         } else if (visitor instanceof MinVisitor) {
             MinVisitor original = (MinVisitor) visitor;
-            Expression transformedExpression =
-                    transformer.transformExpression(original.getExpression());
+            Expression transformedExpression = transformer.transformExpression(original.getExpression());
             MinVisitor transformedVisitor = new MinVisitor(transformedExpression);
             delegateVisitor(transformedVisitor, progress);
             original.setValue(transformedVisitor.getResult().getValue());
         } else if (visitor instanceof MaxVisitor) {
             MaxVisitor original = (MaxVisitor) visitor;
-            Expression transformedExpression =
-                    transformer.transformExpression(original.getExpression());
+            Expression transformedExpression = transformer.transformExpression(original.getExpression());
             MaxVisitor transformedVisitor = new MaxVisitor(transformedExpression);
             delegateVisitor(transformedVisitor, progress);
             original.setValue(transformedVisitor.getResult().getValue());
         } else if (visitor instanceof UniqueVisitor) {
             UniqueVisitor original = (UniqueVisitor) visitor;
-            Expression transformedExpression =
-                    transformer.transformExpression(original.getExpression());
+            Expression transformedExpression = transformer.transformExpression(original.getExpression());
             UniqueVisitor transformedVisitor = new UniqueVisitor(transformedExpression);
             transformedVisitor.setMaxFeatures(original.getMaxFeatures());
             transformedVisitor.setStartIndex(original.getStartIndex());
@@ -280,8 +290,7 @@ class TransformFeatureCollection extends AbstractFeatureCollection {
         }
     }
 
-    protected void delegateVisitor(FeatureVisitor visitor, ProgressListener progress)
-            throws IOException {
+    protected void delegateVisitor(FeatureVisitor visitor, ProgressListener progress) throws IOException {
         Query txQuery = transformer.transformQuery(query);
         transformer.getSource().getFeatures(txQuery).accepts(visitor, progress);
     }

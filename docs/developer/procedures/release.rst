@@ -27,9 +27,9 @@ The following are necessary to perform a GeoTools release:
 Versions and revisions
 ----------------------
 
-When performing a release we don't require a "code freeze" in which no developers can commit to the repository. Instead we release from a revision that is known to pass all tests, including unit/integration tests on the GeoServer side. These instructions are valid in case you are making a release in combination with GeoServer, if you are making a stand alone release it's up to you to choose the proper GIT revision number for the GeoTools released to be picked from.
+When performing a release we don't require a "code freeze" in which no developers can commit to the repository. Instead we release from a revision that is known to pass all tests, including unit/integration tests on the GeoServer side. These instructions are valid in case you are making a release in combination with GeoServer. If you are making a stand alone release, it's up to you to choose the proper GIT revision number for the GeoTools released to be picked from.
 
-To obtain the GeoServer and GeoTools revisions that have passed testing, navigate to `geoserver.org <https://geoserver.org>`__ and download a "binary" nightly build. From the download check the :file:`src/target/VERSION.txt` file. For example:
+To obtain the GeoServer, GWC and GeoTools revisions that have passed testing, navigate to `geoserver.org/download > Development <https://geoserver.org/download>`__, find the correct series (e.g. 2.17.x) and download a “binary” nightly build. From the download check the :file:`src/target/VERSION.txt` file. For example:
 
 .. code-block:: none
 
@@ -66,9 +66,9 @@ Release in JIRA
 
 1. Navigate to the `GeoTools project page <https://osgeo-org.atlassian.net/projects/GEOT?selectedItem=com.atlassian.jira.jira-projects-plugin:release-page&status=released-unreleased>`_ in JIRA.
 
-2. Add a new version for the next version to be released after the current release. For example, if you are releasing GeoTools 27.1, create version 27.2.
+2. Add a new version for the next version to be released after the current release. For example, if you are releasing GeoTools 27.1, create version 27.2.  Enter the current date as the Start Date and use the date from the `release schedule <https://github.com/geoserver/geoserver/wiki/Release-Schedule>`_ for the Release Date.
 
-3. Click in the Actions column for the version you are releasing and select Release. Enter the release date when prompted. If there are still unsolved issues remaining in this release, you will be prompted to move them to an unreleased version. If so, choose the new version you created in step 
+3. Click in the Actions column for the version you are releasing and select Release. Update the Release Date to the current date when prompted. If there are still unsolved issues remaining in this release, you will be prompted to move them to an unreleased version. If so, choose the new version you created in step 2 above.
 
 If you are cutting the first RC of a series, create the stable branch
 ---------------------------------------------------------------------
@@ -95,6 +95,17 @@ When creating the first release candidate of a series, there are some extra step
     git checkout main
     ant -f build/build.xml latest -Drelease=28-SNAPSHOT
 
+* Edit the Dependabot configuration file, `.github/dependabot.yml`, increasing the 2 numbered target branches by one (eg. `27.x -> 28.x` and `26.x -> 27.x`) (leaving `main`) ::
+
+      - package-ecosystem: 'github-actions'
+        directory: '/'
+        schedule:
+          interval: 'monthly'
+        target-branch: '27.x'
+        open-pull-requests-limit: 10
+
+  There is no need to edit the file in other branches, as the configuration is inherited from the main branch.
+
 * Commit the changes and push to the main branch on GitHub::
 
     git commit -am "Update version to 28-SNAPSHOT"
@@ -110,25 +121,13 @@ When creating the first release candidate of a series, there are some extra step
     
     Even if you wish to continue build prior branches please disable the documentation builds.
 
-  * For the new stable branch create new jobs, duplicate from the existing ``stable`` jobs, editing branch specifier to the new branch (e.g. `27.x`)
-    
-  * Special care is needed when setting up java11 build which uses `A`, `B`, `C`, ... groups.
-    
-    For example if the next group in the rotation is group ``A``:
-    
-    * Carefully set Multi-Project Throttle Category to the next available groups
-      
-      ``Build A``
-      
-    * Adjust custom workspace (used as a shared workspace and local maven repo location) to match the throttle category groups
-      
-      :file:`workspace/java11_27`
+  * For the new stable branch create new jobs, duplicate from the two existing ``stable`` jobs (geotools-27.x and geotools-27.x-docs), editing branch specifier to the new branch (e.g. `27.x` -> `28.x`)
 
 * Announce on the developer mailing list that the new stable branch has been created.
 
 * This is the time to update the README.md, README.html and documentation links
   
-  For the new `stable` branch, and the remote for the official GeoTools is called ``upstream``::
+  For the new `stable` (old `main`) branch, (and assuming the remote for the official GeoTools is called ``upstream``)::
   
     git checkout 28.x
     git pull
@@ -137,16 +136,26 @@ When creating the first release candidate of a series, there are some extra step
     git commit -m "Change 28.x to stable branch"
     git push upstream 28.x
 
-  For the new `maintenance` branch, and the remote for the official GeoTools is called ``upstream``::
+  For the new `maintenance` (old `stable`) branch::
   
-    git checkout 26.x
+    git checkout 27.x
     git pull
     ant -f build/build.xml maintenance
     git add .
-    git commit -m "Change 26.x to stable branch"
-    git push upstream 26.x
+    git commit -m "Change 27.x to maintenance branch"
+    git push upstream 27.x
   
-  This change will update the `pom.xml` series used to determine where documentation from the branch is published.
+  For the old `maintenance` (now `archive`) branch::
+  
+    git checkout 26.x
+    git pull
+    ant -f build/build.xml archive
+    git add .
+    git commit -m "Change 26.x to archive branch"
+    git push upstream 26.x
+
+  
+  This change will update the `pom.xml` series used to determine where documentation from the branch is published (or **not** published, if we ever have to create an emergency release for archived branches - so that the correct maintenance docs are not overwritten.)
 
 Build the Release
 -----------------
@@ -202,7 +211,7 @@ It is important to test the artifacts using the minimum supported version of Jav
    
    If you don't want to fiddle with your main repo just use ``mvn -Dmaven.repo.local=/tmp/m2 install -Dall -T1C`` where it points to any empty directory.
 
-3. Userguide: check the eclipse quickstart section on `geotools.version`, should reference the correct release tag and snapshot tag.
+3. Userguide: Open and check the tutorial -> quickstart -> eclipse guide, search for `geotools.version`, which should reference the correct release tag and snapshot tag.
 
 4. Binary download:
    
@@ -269,7 +278,7 @@ Publish release notes to github tag:
    
    * Select format `Markdown`
    * Layout: Issue key with link
-   * Issue types: `Bug` and `Improvement`
+   * Issue types: All
    
    Change the heading from :kbd:`Release notes - GeoTools - Version 26.1` to :kbd:`Release notes`, and apply the change with :guilabel:`Done`.
 
@@ -295,7 +304,8 @@ Publish release notes to github tag:
    
    * Release title: `GeoTools 26.1`
    * Write: Paste the markdown from Jira release notes editor
-   
+   * Set as the latest release: only tick this for stable releases, leave unticked for maintenance and support releases
+
    Use :guilabel:`Publish release` button to publish the release notes.
    
 Announce the Release
@@ -311,6 +321,7 @@ Announce on GeoTools Blog
 
    * Update the Sourceforge links above to reflect the release
    * Update the Release Notes with link to GitHub release URL: https://github.com/geotools/geotools/releases/tag/26.1
+   * Paste the Release Notes hyperlinks from Jira, after using a tool like https://www.htmlwasher.com/ to clean up the HTML.
    * For a new stable series, be sure to thank those involved with the release (testing, completed proposals, docs, and so on)
 
 #. The public entry point will be here: https://geotoolsnews.blogspot.com/

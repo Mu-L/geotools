@@ -16,6 +16,7 @@
  */
 package org.geotools.filter;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import org.geotools.api.filter.FilterFactory;
@@ -51,16 +52,15 @@ public class LikeFilterImplTest {
     @Test
     public void testReDOS1() {
         try {
-            PropertyIsLike l =
-                    ff.like(
-                            ff.function(
-                                    "strTrim",
-                                    ff.literal(
-                                            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab")),
-                            "$",
-                            "*",
-                            "?",
-                            "(a+)+");
+            PropertyIsLike l = ff.like(
+                    ff.function(
+                            "strTrim",
+                            ff.literal(
+                                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab")),
+                    "$",
+                    "*",
+                    "?",
+                    "(a+)+");
             l.evaluate(null);
             fail();
         } catch (IllegalArgumentException e) {
@@ -71,18 +71,30 @@ public class LikeFilterImplTest {
     @Test
     public void testReDOS2() {
         try {
-            PropertyIsLike l =
-                    ff.like(
-                            ff.literal(
-                                    "hchcchicihcchciiicichhcichcihcchiihichiciiiihhcchicchhcihchcihiihciichhccciccichcichiihcchcihhicchcciicchcccihiiihhihihihichicihhcciccchihhhcchichchciihiicihciihcccciciccicciiiiiiiiicihhhiiiihchccchchhhhiiihchihcccchhhiiiiiiiicicichicihcciciihichhhhchihciiihhiccccccciciihhichiccchhicchicihihccichicciihcichccihhiciccccccccichhhhihihhcchchihihiihhihihihicichihiiiihhhhihhhchhichiicihhiiiiihchccccchichci"),
-                            "$",
-                            "*",
-                            "?",
-                            "(h|h|ih(((i|a|c|c|a|i|i|j|b|a|i|b|a|a|j))+h)ahbfhba|c|i)*");
+            PropertyIsLike l = ff.like(
+                    ff.literal(
+                            "hchcchicihcchciiicichhcichcihcchiihichiciiiihhcchicchhcihchcihiihciichhccciccichcichiihcchcihhicchcciicchcccihiiihhihihihichicihhcciccchihhhcchichchciihiicihciihcccciciccicciiiiiiiiicihhhiiiihchccchchhhhiiihchihcccchhhiiiiiiiicicichicihcciciihichhhhchihciiihhiccccccciciihhichiccchhicchicihihccichicciihcichccihhiciccccccccichhhhihihhcchchihihiihhihihihicichihiiiihhhhihhhchhichiicihhiiiiihchccccchichci"),
+                    "$",
+                    "*",
+                    "?",
+                    "(h|h|ih(((i|a|c|c|a|i|i|j|b|a|i|b|a|a|j))+h)ahbfhba|c|i)*");
             l.evaluate(null);
             fail();
         } catch (IllegalArgumentException e) {
             // as expected, no OOM anylonger
         }
+    }
+
+    /** Verifies patterns containing ampersand are working as expected */
+    @Test
+    public void testAmpersandHandling() {
+        String input = "this is foo & bar geospatial";
+        String pattern = "*foo & bar*";
+        PropertyIsLike pil = ff.like(ff.literal(input), pattern);
+        String msg = String.format("Expecting '%s' to match '%s'.", pattern, input);
+        assertTrue(msg, pil.evaluate(null));
+
+        pil = ff.like(ff.literal(input), pattern, "*", "?", "!");
+        assertTrue(msg, pil.evaluate(null));
     }
 }

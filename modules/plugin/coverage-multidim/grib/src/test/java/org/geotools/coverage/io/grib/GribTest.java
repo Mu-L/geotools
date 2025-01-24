@@ -20,7 +20,6 @@ import java.awt.geom.Point2D;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,6 +57,7 @@ import org.junit.Test;
 import ucar.nc2.Attribute;
 import ucar.nc2.Variable;
 import ucar.nc2.dataset.NetcdfDataset;
+import ucar.nc2.dataset.NetcdfDatasets;
 
 /** Unit test for testing Grib data. */
 public class GribTest extends Assert {
@@ -109,8 +109,8 @@ public class GribTest extends Assert {
 
         TestData.unzipFile(this, referenceDir + "/TT_FC_INCA_EarthShape.zip");
         final File file = new File(workDir, "TT_FC_INCA_EarthShape.grb2");
-        try (NetcdfDataset dataset = NetcdfDataset.openDataset(file.getAbsolutePath())) {
-            Variable var = dataset.findVariable(null, "LambertConformal_Projection");
+        try (NetcdfDataset dataset = NetcdfDatasets.openDataset(file.getAbsolutePath())) {
+            Variable var = dataset.findVariable("LambertConformal_Projection");
             assertNotNull(var);
 
             // Before switching to NetCDF 4.6.2 there was a bug which was returning
@@ -167,8 +167,7 @@ public class GribTest extends Assert {
         List<String> MIMETypes = Arrays.asList(spi.getMIMETypes());
         // Creation of similar lists containing the values for the grib format
         List<String> gribSuffixes = Arrays.asList(new String[] {"grib", "grb", "grb2"});
-        List<String> gribFormatNames =
-                Arrays.asList(new String[] {"grib", "grib2", "GRIB", "GRIB2"});
+        List<String> gribFormatNames = Arrays.asList(new String[] {"grib", "grib2", "GRIB", "GRIB2"});
         List<String> gribMIMETypes = Arrays.asList(new String[] {"application/octet-stream"});
         // Check if the grib informations are present
         Assert.assertTrue(suffixes.containsAll(gribSuffixes));
@@ -178,7 +177,7 @@ public class GribTest extends Assert {
 
     /** Test on a Grib image. */
     @Test
-    public void testGribImage() throws MalformedURLException, IOException {
+    public void testGribImage() throws IOException {
         // Selection of the input file
         final File file = TestData.file(this, "sampleGrib.grb2");
         // Testing the 2 points
@@ -186,12 +185,11 @@ public class GribTest extends Assert {
     }
 
     /**
-     * Private method for checking if the selected point are nodata or not. This ensures that the
-     * images are flipped vertically only if needed. If the image is not correctly flipped then,
-     * validpoint and nodatapoint should be inverted.
+     * Private method for checking if the selected point are nodata or not. This ensures that the images are flipped
+     * vertically only if needed. If the image is not correctly flipped then, validpoint and nodatapoint should be
+     * inverted.
      */
-    private void testGribFile(final File inputFile, Point2D validPoint, Point2D nodataPoint)
-            throws MalformedURLException, IOException {
+    private void testGribFile(final File inputFile, Point2D validPoint, Point2D nodataPoint) throws IOException {
         // Get format
         final AbstractGridFormat format =
                 GridFormatFinder.findFormat(inputFile.toURI().toURL(), null);
@@ -235,7 +233,7 @@ public class GribTest extends Assert {
 
     /** Test on a Grib image asking for a larger bounding box. */
     @Test
-    public void testGribImageWithLargeBBOX() throws MalformedURLException, IOException {
+    public void testGribImageWithLargeBBOX() throws IOException {
         // Selection of the input file
         final File inputFile = TestData.file(this, "sampleGrib.grb2");
         // Get format
@@ -260,14 +258,11 @@ public class GribTest extends Assert {
             assertEquals("true", reader.getMetadataValue(coverageName, "HAS_TIME_DOMAIN"));
 
             // Expanding the envelope
-            final ParameterValue<GridGeometry2D> gg =
-                    AbstractGridFormat.READ_GRIDGEOMETRY2D.createValue();
+            final ParameterValue<GridGeometry2D> gg = AbstractGridFormat.READ_GRIDGEOMETRY2D.createValue();
             final GeneralBounds originalEnvelope = reader.getOriginalEnvelope(coverageName);
             final GeneralBounds newEnvelope = new GeneralBounds(originalEnvelope);
-            newEnvelope.setCoordinateReferenceSystem(
-                    reader.getCoordinateReferenceSystem(coverageName));
-            newEnvelope.add(
-                    new Position2D(newEnvelope.getMinimum(0) - 10, newEnvelope.getMinimum(1) - 10));
+            newEnvelope.setCoordinateReferenceSystem(reader.getCoordinateReferenceSystem(coverageName));
+            newEnvelope.add(new Position2D(newEnvelope.getMinimum(0) - 10, newEnvelope.getMinimum(1) - 10));
 
             // Selecting the same gridRange
             GridEnvelope gridRange = reader.getOriginalGridRange(coverageName);
@@ -292,7 +287,7 @@ public class GribTest extends Assert {
 
     /** Test on a Grib image with temporal bands, querying different bands */
     @Test
-    public void testGribImageWithTimeDimension() throws MalformedURLException, IOException {
+    public void testGribImageWithTimeDimension() throws IOException {
         // Selection of the input file
         final File inputFile = TestData.file(this, "tpcprblty.2019100912.incremental.grib2");
         // Get format
@@ -314,38 +309,32 @@ public class GribTest extends Assert {
             String coverageName = names[0];
 
             // Parsing metadata values
-            assertEquals(
-                    "true",
-                    reader.getMetadataValue(coverageName, GridCoverage2DReader.HAS_TIME_DOMAIN));
-            assertEquals(
-                    "false",
-                    reader.getMetadataValue(
-                            coverageName, GridCoverage2DReader.HAS_ELEVATION_DOMAIN));
+            assertEquals("true", reader.getMetadataValue(coverageName, GridCoverage2DReader.HAS_TIME_DOMAIN));
+            assertEquals("false", reader.getMetadataValue(coverageName, GridCoverage2DReader.HAS_ELEVATION_DOMAIN));
 
             // Get the envelope
-            final ParameterValue<GridGeometry2D> gg =
-                    AbstractGridFormat.READ_GRIDGEOMETRY2D.createValue();
+            final ParameterValue<GridGeometry2D> gg = AbstractGridFormat.READ_GRIDGEOMETRY2D.createValue();
 
             final ParameterValue<List> time =
                     new DefaultParameterDescriptor<>("TIME", List.class, null, null).createValue();
-            // 2019-10-09T18:00:00.000Z
-            time.setValue(new ArrayList<>(Collections.singletonList(new Date(1570644000000L))));
+            // Time value have changed with the NetCDF Version upgrade.
+            // 2019-10-09T15:00:00.000Z
+            time.setValue(new ArrayList<>(Collections.singletonList(new Date(1570633200000L))));
 
             // HEIGHT_ABOVE_GROUND = "[10.0]"
             final ParameterValue<List> height =
-                    new DefaultParameterDescriptor<>("HEIGHT_ABOVE_GROUND", List.class, null, null)
-                            .createValue();
+                    new DefaultParameterDescriptor<>("HEIGHT_ABOVE_GROUND", List.class, null, null).createValue();
             height.setValue(new ArrayList<>(Collections.singletonList(10.0)));
 
             GeneralParameterValue[] values = {gg, time, height};
 
-            // Read with 0th date
+            // Read with 1st date
             GridCoverage2D grid = reader.read(coverageName, values);
             assertNotNull(grid);
 
             // Read with 12th date
-            // 2019-10-12T18:00:00.000Z
-            time.setValue(new ArrayList<>(Collections.singletonList(new Date(1570903200000L))));
+            // 2019-10-12T15:00:00.000Z
+            time.setValue(new ArrayList<>(Collections.singletonList(new Date(1570892400000L))));
             grid = reader.read(coverageName, values);
             assertNotNull(grid);
         } finally {
@@ -367,8 +356,7 @@ public class GribTest extends Assert {
      * @param expectedCentralMeridian expected central meridian of rotated pole projection
      * @param expectedLatitudeOfOrigin expected latitude of origin of the rotated pole projection
      */
-    private void checkRotatedPole(
-            String gribFileName, double expectedCentralMeridian, double expectedLatitudeOfOrigin)
+    private void checkRotatedPole(String gribFileName, double expectedCentralMeridian, double expectedLatitudeOfOrigin)
             throws Exception {
         File file = TestData.file(this, gribFileName);
         NetCDFReader reader = null;
@@ -376,12 +364,9 @@ public class GribTest extends Assert {
             reader = new NetCDFReader(file, null);
             String[] coverages = reader.getGridCoverageNames();
             CoordinateReferenceSystem crs = reader.getCoordinateReferenceSystem(coverages[0]);
-            NetCDFCoordinateReferenceSystemType crsType =
-                    NetCDFCoordinateReferenceSystemType.parseCRS(crs);
+            NetCDFCoordinateReferenceSystemType crsType = NetCDFCoordinateReferenceSystemType.parseCRS(crs);
             assertSame(NetCDFCoordinateReferenceSystemType.ROTATED_POLE, crsType);
-            assertSame(
-                    NetCDFCoordinateReferenceSystemType.NetCDFCoordinate.RLATLON_COORDS,
-                    crsType.getCoordinates());
+            assertSame(NetCDFCoordinateReferenceSystemType.NetCDFCoordinate.RLATLON_COORDS, crsType.getCoordinates());
             assertSame(NetCDFProjection.ROTATED_POLE, crsType.getNetCDFProjection());
             assertTrue(crs instanceof DerivedCRS);
             DerivedCRS derivedCRS = ((DerivedCRS) crs);
@@ -405,8 +390,8 @@ public class GribTest extends Assert {
     }
 
     /**
-     * Test that an RAP native GRIB2 file with GDS template 32769 is interpreted as a {@link
-     * RotatedPole} projection with expected parameters.
+     * Test that an RAP native GRIB2 file with GDS template 32769 is interpreted as a {@link RotatedPole} projection
+     * with expected parameters.
      */
     @Test
     public void testRapNativeRotatedPole() throws Exception {
@@ -414,8 +399,8 @@ public class GribTest extends Assert {
     }
 
     /**
-     * Test that a COSMO EU GRIB2 file with GDS template 1 is interpreted as a {@link RotatedPole}
-     * projection with expected parameters.
+     * Test that a COSMO EU GRIB2 file with GDS template 1 is interpreted as a {@link RotatedPole} projection with
+     * expected parameters.
      */
     @Test
     public void testCosmoEuRotatedPole() throws Exception {

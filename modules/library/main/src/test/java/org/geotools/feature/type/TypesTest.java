@@ -70,8 +70,7 @@ public class TypesTest {
         builder.add(attributeName, String.class);
         SimpleFeatureType featureType = builder.buildFeatureType();
 
-        SimpleFeature feature =
-                SimpleFeatureBuilder.build(featureType, new Object[] {"Value"}, null);
+        SimpleFeature feature = SimpleFeatureBuilder.build(featureType, new Object[] {"Value"}, null);
 
         Assert.assertNotNull(feature);
     }
@@ -85,13 +84,16 @@ public class TypesTest {
 
         SimpleFeatureTypeBuilder builder = new SimpleFeatureTypeBuilder(); // $NON-NLS-1$
         builder.setName("test");
-        builder.restriction(filter).add(attributeName, String.class);
+        builder.restriction(filter).minOccurs(1).nillable(false).add(attributeName, String.class);
         SimpleFeatureType featureType = builder.buildFeatureType();
 
-        SimpleFeature feature =
-                SimpleFeatureBuilder.build(featureType, new Object[] {"Value"}, null);
+        SimpleFeature feature = SimpleFeatureBuilder.build(featureType, new Object[] {"Value"}, null);
 
         Assert.assertNotNull(feature);
+        Assert.assertTrue("valid", Types.isValid(feature));
+
+        feature.setAttribute("string", null);
+        Assert.assertFalse("invalid", Types.isValid(feature));
     }
 
     @Test

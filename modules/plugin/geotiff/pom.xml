@@ -13,7 +13,7 @@
   <parent>
     <groupId>org.geotools</groupId>
     <artifactId>plugin</artifactId>
-    <version>31-SNAPSHOT</version>
+    <version>33-SNAPSHOT</version>
   </parent>
 
   <!-- =========================================================== -->
@@ -92,6 +92,10 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
+      <groupId>javax.measure</groupId>
+      <artifactId>unit-api</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.geotools</groupId>
       <artifactId>gt-coverage</artifactId>
       <version>${project.version}</version>
@@ -145,6 +149,11 @@
       <groupId>javax.media</groupId>
       <artifactId>jai_codec</artifactId>
       <!-- The version number is specified in the parent POM. -->
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.wiremock</groupId>
+      <artifactId>wiremock-standalone</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

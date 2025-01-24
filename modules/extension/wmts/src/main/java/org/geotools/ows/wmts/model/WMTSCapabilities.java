@@ -19,8 +19,10 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.opengis.ows11.AllowedValuesType;
@@ -169,8 +171,7 @@ public class WMTSCapabilities extends Capabilities {
                                 }
                             }
                         } catch (MalformedURLException e) {
-                            throw new ServiceException(
-                                    "Error parsing WMTS operation URL: " + e.getMessage());
+                            throw new ServiceException("Error parsing WMTS operation URL: " + e.getMessage());
                         }
                     }
                     EList posts = dcp.getHTTP().getPost();
@@ -194,8 +195,7 @@ public class WMTSCapabilities extends Capabilities {
                                 }
                             }
                         } catch (MalformedURLException e) {
-                            throw new ServiceException(
-                                    "Error parsing WMTS operation URL: " + e.getMessage());
+                            throw new ServiceException("Error parsing WMTS operation URL: " + e.getMessage());
                         }
                     }
                 }
@@ -221,16 +221,18 @@ public class WMTSCapabilities extends Capabilities {
         ReferencedEnvelope wgs84Env = new ReferencedEnvelope(wmtsLayer.getLatLonBoundingBox());
 
         Map<String, TileMatrixSetLink> tileMatrixLinks = wmtsLayer.getTileMatrixLinks();
+        Iterator<Entry<String, TileMatrixSetLink>> iterator =
+                tileMatrixLinks.entrySet().iterator();
         // add a bbox for every CRS
-        for (TileMatrixSetLink tmsLink : tileMatrixLinks.values()) {
+        while (iterator.hasNext()) {
+            TileMatrixSetLink tmsLink = iterator.next().getValue();
             String tmsIdentifier = tmsLink.getIdentifier();
             TileMatrixSet tms = matrixSetMap.get(tmsIdentifier);
             if (tms == null) {
-                LOGGER.info(
-                        String.format(
-                                "WMTS capabilities for layer %s specified a TileMatrixSet link %s that doesn't exist.",
-                                wmtsLayer.getName(), tmsIdentifier));
-                tileMatrixLinks.remove(tmsIdentifier);
+                LOGGER.info(String.format(
+                        "WMTS capabilities for layer %s specified a TileMatrixSet link %s that doesn't exist.",
+                        wmtsLayer.getName(), tmsIdentifier));
+                iterator.remove();
                 continue;
             }
             CoordinateReferenceSystem tmsCRS = tms.getCoordinateReferenceSystem();
@@ -242,16 +244,11 @@ public class WMTSCapabilities extends Capabilities {
             } else {
                 try {
                     // tileMatrix did not provide bounds, reproject the LatLon ones.
-                    wmtsLayer
-                            .getBoundingBoxes()
-                            .put(srs, new CRSEnvelope(wgs84Env.transform(tmsCRS, true)));
+                    wmtsLayer.getBoundingBoxes().put(srs, new CRSEnvelope(wgs84Env.transform(tmsCRS, true)));
 
                 } catch (TransformException | FactoryException e) {
                     if (LOGGER.isLoggable(Level.INFO))
-                        LOGGER.log(
-                                Level.INFO,
-                                "Not adding CRS " + srs + " for layer " + wmtsLayer.getName(),
-                                e);
+                        LOGGER.log(Level.INFO, "Not adding CRS " + srs + " for layer " + wmtsLayer.getName(), e);
                 }
             }
         }
@@ -275,11 +272,7 @@ public class WMTSCapabilities extends Capabilities {
                     // the RE can't be projected on WGS84,
                     // so let's try another one
                     if (LOGGER.isLoggable(Level.FINE))
-                        LOGGER.fine(
-                                "Can't use "
-                                        + tms.getIdentifier()
-                                        + " for bbox: "
-                                        + ex.getMessage());
+                        LOGGER.fine("Can't use " + tms.getIdentifier() + " for bbox: " + ex.getMessage());
                     continue;
                 }
             }
@@ -316,10 +309,7 @@ public class WMTSCapabilities extends Capabilities {
             matrix.setParent(matrixSet);
             if (matrix.getCrs() == null) {
                 throw new ServiceException(
-                        "MatrixSet "
-                                + tm.getIdentifier().getValue()
-                                + ": unable to create CRS "
-                                + matrixSet.getCrs());
+                        "MatrixSet " + tm.getIdentifier().getValue() + ": unable to create CRS " + matrixSet.getCrs());
             }
             List<Double> c = mat.getTopLeftCorner();
 
@@ -332,10 +322,9 @@ public class WMTSCapabilities extends Capabilities {
     private WMTSLayer parseLayer(LayerType layerType) {
 
         String name = layerType.getIdentifier().getValue();
-        String title =
-                layerType.getTitle().size() > 0
-                        ? ((LanguageStringType) layerType.getTitle().get(0)).getValue()
-                        : name;
+        String title = layerType.getTitle().size() > 0
+                ? ((LanguageStringType) layerType.getTitle().get(0)).getValue()
+                : name;
 
         WMTSLayer layer = new WMTSLayer(title);
         layer.setName(name);
@@ -480,8 +469,8 @@ public class WMTSCapabilities extends Capabilities {
     }
 
     /**
-     * The request contains information about possible Requests that can be made against this
-     * server, including URLs and formats.
+     * The request contains information about possible Requests that can be made against this server, including URLs and
+     * formats.
      *
      * @return Returns the request.
      */
@@ -495,8 +484,8 @@ public class WMTSCapabilities extends Capabilities {
     }
 
     /**
-     * Exceptions declare what kind of formats this server can return exceptions in. They are used
-     * during subsequent requests.
+     * Exceptions declare what kind of formats this server can return exceptions in. They are used during subsequent
+     * requests.
      */
     public String[] getExceptions() {
         return exceptions;

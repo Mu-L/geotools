@@ -29,10 +29,13 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -83,8 +86,8 @@ public class SQLServerDialect extends BasicSQLDialect {
     static final String SPATIAL_INDEX_KEY = "SpatialIndex";
 
     /**
-     * Pattern used to match the first FROM element in a SQL query, without matching also attributes
-     * containing FROM inside the name. We require to locate
+     * Pattern used to match the first FROM element in a SQL query, without matching also attributes containing FROM
+     * inside the name. We require to locate
      */
     static final Pattern FROM_PATTERN = Pattern.compile("(\\s+)(FROM)(\\s)+", Pattern.DOTALL);
 
@@ -99,45 +102,44 @@ public class SQLServerDialect extends BasicSQLDialect {
 
     private Boolean forceSpatialIndexes = false;
 
+    private boolean estimatedExtentsEnabled = false;
+
     private String tableHints;
 
-    static final Map<String, Class> TYPE_TO_CLASS_MAP =
-            Map.ofEntries(
-                    entry("GEOMETRY", Geometry.class),
-                    entry("GEOGRAPHY", Geometry.class),
-                    entry("POINT", Point.class),
-                    entry("POINTM", Point.class),
-                    entry("LINESTRING", LineString.class),
-                    entry("LINESTRINGM", LineString.class),
-                    entry("POLYGON", Polygon.class),
-                    entry("POLYGONM", Polygon.class),
-                    entry("MULTIPOINT", MultiPoint.class),
-                    entry("MULTIPOINTM", MultiPoint.class),
-                    entry("MULTILINESTRING", MultiLineString.class),
-                    entry("MULTILINESTRINGM", MultiLineString.class),
-                    entry("MULTIPOLYGON", MultiPolygon.class),
-                    entry("MULTIPOLYGONM", MultiPolygon.class),
-                    entry("GEOMETRYCOLLECTION", GeometryCollection.class),
-                    entry("GEOMETRYCOLLECTIONM", GeometryCollection.class));
+    static final Map<String, Class> TYPE_TO_CLASS_MAP = Map.ofEntries(
+            entry("GEOMETRY", Geometry.class),
+            entry("GEOGRAPHY", Geometry.class),
+            entry("POINT", Point.class),
+            entry("POINTM", Point.class),
+            entry("LINESTRING", LineString.class),
+            entry("LINESTRINGM", LineString.class),
+            entry("POLYGON", Polygon.class),
+            entry("POLYGONM", Polygon.class),
+            entry("MULTIPOINT", MultiPoint.class),
+            entry("MULTIPOINTM", MultiPoint.class),
+            entry("MULTILINESTRING", MultiLineString.class),
+            entry("MULTILINESTRINGM", MultiLineString.class),
+            entry("MULTIPOLYGON", MultiPolygon.class),
+            entry("MULTIPOLYGONM", MultiPolygon.class),
+            entry("GEOMETRYCOLLECTION", GeometryCollection.class),
+            entry("GEOMETRYCOLLECTIONM", GeometryCollection.class));
 
-    static final Map<Class, String> CLASS_TO_TYPE_MAP =
-            Map.of(
-                    Geometry.class, "GEOMETRY",
-                    Point.class, "POINT",
-                    LineString.class, "LINESTRING",
-                    Polygon.class, "POLYGON",
-                    MultiPoint.class, "MULTIPOINT",
-                    MultiLineString.class, "MULTILINESTRING",
-                    MultiPolygon.class, "MULTIPOLYGON",
-                    GeometryCollection.class, "GEOMETRYCOLLECTION");
+    static final Map<Class, String> CLASS_TO_TYPE_MAP = Map.of(
+            Geometry.class, "GEOMETRY",
+            Point.class, "POINT",
+            LineString.class, "LINESTRING",
+            Polygon.class, "POLYGON",
+            MultiPoint.class, "MULTIPOINT",
+            MultiLineString.class, "MULTILINESTRING",
+            MultiPolygon.class, "MULTIPOLYGON",
+            GeometryCollection.class, "GEOMETRYCOLLECTION");
 
     public SQLServerDialect(JDBCDataStore dataStore) {
         super(dataStore);
     }
 
     @Override
-    public boolean includeTable(String schemaName, String tableName, Connection cx)
-            throws SQLException {
+    public boolean includeTable(String schemaName, String tableName, Connection cx) throws SQLException {
         return !("INFORMATION_SCHEMA".equals(schemaName) || "sys".equals(schemaName));
     }
 
@@ -200,17 +202,14 @@ public class SQLServerDialect extends BasicSQLDialect {
                             srid = (Integer) gd.getUserData().get(JDBCDataStore.JDBC_NATIVE_SRID);
                         } else if (gd.getCoordinateReferenceSystem() != null) {
                             try {
-                                Integer result =
-                                        CRS.lookupEpsgCode(gd.getCoordinateReferenceSystem(), true);
+                                Integer result = CRS.lookupEpsgCode(gd.getCoordinateReferenceSystem(), true);
                                 if (result != null) {
                                     srid = result;
                                 }
                             } catch (Exception e) {
                                 LOGGER.log(
                                         Level.FINE,
-                                        "Error looking up the "
-                                                + "epsg code for metadata "
-                                                + "insertion, assuming -1",
+                                        "Error looking up the " + "epsg code for metadata " + "insertion, assuming -1",
                                         e);
                             }
                         }
@@ -277,26 +276,14 @@ public class SQLServerDialect extends BasicSQLDialect {
                             CoordinateSystemAxis a0 = cs.getAxis(0);
                             CoordinateSystemAxis a1 = cs.getAxis(1);
                             bbox = "(";
-                            bbox +=
-                                    (Double.isInfinite(a0.getMinimumValue())
-                                                    ? DEFAULT_AXIS_MIN
-                                                    : a0.getMinimumValue())
-                                            + ", ";
-                            bbox +=
-                                    (Double.isInfinite(a1.getMinimumValue())
-                                                    ? DEFAULT_AXIS_MIN
-                                                    : a1.getMinimumValue())
-                                            + ", ";
+                            bbox += (Double.isInfinite(a0.getMinimumValue()) ? DEFAULT_AXIS_MIN : a0.getMinimumValue())
+                                    + ", ";
+                            bbox += (Double.isInfinite(a1.getMinimumValue()) ? DEFAULT_AXIS_MIN : a1.getMinimumValue())
+                                    + ", ";
 
-                            bbox +=
-                                    (Double.isInfinite(a0.getMaximumValue())
-                                                    ? DEFAULT_AXIS_MAX
-                                                    : a0.getMaximumValue())
-                                            + ", ";
-                            bbox +=
-                                    Double.isInfinite(a1.getMaximumValue())
-                                            ? DEFAULT_AXIS_MAX
-                                            : a1.getMaximumValue();
+                            bbox += (Double.isInfinite(a0.getMaximumValue()) ? DEFAULT_AXIS_MAX : a0.getMaximumValue())
+                                    + ", ";
+                            bbox += Double.isInfinite(a1.getMaximumValue()) ? DEFAULT_AXIS_MAX : a1.getMaximumValue();
                             bbox += ")";
                         }
                     }
@@ -306,8 +293,7 @@ public class SQLServerDialect extends BasicSQLDialect {
                         continue;
                     }
                     StringBuffer sql = new StringBuffer("CREATE SPATIAL INDEX ");
-                    encodeTableName(
-                            featureType.getTypeName() + "_" + gd.getLocalName() + "_index", sql);
+                    encodeTableName(featureType.getTypeName() + "_" + gd.getLocalName() + "_index", sql);
                     sql.append(" ON ");
                     encodeTableName(featureType.getTypeName(), sql);
                     sql.append("(");
@@ -334,9 +320,7 @@ public class SQLServerDialect extends BasicSQLDialect {
 
         String gType = null;
         if ("geometry".equalsIgnoreCase(typeName) && geometryMetadataTable != null) {
-            gType =
-                    lookupGeometryType(
-                            columnMetaData, cx, geometryMetadataTable, "f_geometry_column");
+            gType = lookupGeometryType(columnMetaData, cx, geometryMetadataTable, "f_geometry_column");
         } else {
             return null;
         }
@@ -355,8 +339,7 @@ public class SQLServerDialect extends BasicSQLDialect {
         }
     }
 
-    private String lookupGeometryType(
-            ResultSet columnMetaData, Connection cx, String gTableName, String gColumnName)
+    private String lookupGeometryType(ResultSet columnMetaData, Connection cx, String gTableName, String gColumnName)
             throws SQLException {
 
         // grab the information we need to proceed
@@ -368,23 +351,18 @@ public class SQLServerDialect extends BasicSQLDialect {
         ResultSet result = null;
         try {
             String schema = dataStore.getDatabaseSchema();
-            String sqlStatement =
-                    "SELECT TYPE FROM "
-                            + gTableName
-                            + " WHERE " //
-                            + (schema == null
-                                    ? ""
-                                    : "F_TABLE_SCHEMA = '"
-                                            + dataStore.getDatabaseSchema()
-                                            + "' AND ")
-                            + "F_TABLE_NAME = '"
-                            + tableName
-                            + "' " //
-                            + "AND "
-                            + gColumnName
-                            + " = '"
-                            + columnName
-                            + "'";
+            String sqlStatement = "SELECT TYPE FROM "
+                    + gTableName
+                    + " WHERE " //
+                    + (schema == null ? "" : "F_TABLE_SCHEMA = '" + dataStore.getDatabaseSchema() + "' AND ")
+                    + "F_TABLE_NAME = '"
+                    + tableName
+                    + "' " //
+                    + "AND "
+                    + gColumnName
+                    + " = '"
+                    + columnName
+                    + "'";
 
             LOGGER.log(Level.FINE, "Geometry type check; {0} ", sqlStatement);
             statement = cx.createStatement();
@@ -404,8 +382,7 @@ public class SQLServerDialect extends BasicSQLDialect {
     }
 
     public Integer getGeometrySRIDfromMetadataTable(
-            String schemaName, String tableName, String columnName, Connection cx)
-            throws SQLException {
+            String schemaName, String tableName, String columnName, Connection cx) throws SQLException {
 
         if (geometryMetadataTable == null) {
             return null;
@@ -416,18 +393,13 @@ public class SQLServerDialect extends BasicSQLDialect {
 
         try {
             String schema = dataStore.getDatabaseSchema();
-            String sql =
-                    "SELECT SRID FROM "
-                            + geometryMetadataTable
-                            + " WHERE " //
-                            + (schema == null
-                                    ? ""
-                                    : "F_TABLE_SCHEMA = '"
-                                            + dataStore.getDatabaseSchema()
-                                            + "' AND ")
-                            + "F_TABLE_NAME = '"
-                            + tableName
-                            + "' "; //
+            String sql = "SELECT SRID FROM "
+                    + geometryMetadataTable
+                    + " WHERE " //
+                    + (schema == null ? "" : "F_TABLE_SCHEMA = '" + dataStore.getDatabaseSchema() + "' AND ")
+                    + "F_TABLE_NAME = '"
+                    + tableName
+                    + "' "; //
 
             LOGGER.log(Level.FINE, "Geometry type check; {0} ", sql);
             statement = cx.createStatement();
@@ -445,8 +417,7 @@ public class SQLServerDialect extends BasicSQLDialect {
     }
 
     @Override
-    public Integer getGeometrySRID(
-            String schemaName, String tableName, String columnName, Connection cx)
+    public Integer getGeometrySRID(String schemaName, String tableName, String columnName, Connection cx)
             throws SQLException {
 
         // try retrieve the srid from geometryMetadataTable
@@ -488,8 +459,7 @@ public class SQLServerDialect extends BasicSQLDialect {
     }
 
     public Integer getGeometryDimensionFromMetadataTable(
-            String schemaName, String tableName, String columnName, Connection cx)
-            throws SQLException {
+            String schemaName, String tableName, String columnName, Connection cx) throws SQLException {
 
         if (geometryMetadataTable == null) {
             return null;
@@ -500,18 +470,13 @@ public class SQLServerDialect extends BasicSQLDialect {
 
         try {
             String schema = dataStore.getDatabaseSchema();
-            String sql =
-                    "SELECT COORD_DIMENSION FROM "
-                            + geometryMetadataTable
-                            + " WHERE " //
-                            + (schema == null
-                                    ? ""
-                                    : "F_TABLE_SCHEMA = '"
-                                            + dataStore.getDatabaseSchema()
-                                            + "' AND ")
-                            + "F_TABLE_NAME = '"
-                            + tableName
-                            + "' "; //
+            String sql = "SELECT COORD_DIMENSION FROM "
+                    + geometryMetadataTable
+                    + " WHERE " //
+                    + (schema == null ? "" : "F_TABLE_SCHEMA = '" + dataStore.getDatabaseSchema() + "' AND ")
+                    + "F_TABLE_NAME = '"
+                    + tableName
+                    + "' "; //
 
             LOGGER.log(Level.FINE, "Geometry dimension check; {0} ", sql);
             statement = cx.createStatement();
@@ -529,12 +494,10 @@ public class SQLServerDialect extends BasicSQLDialect {
     }
 
     @Override
-    public int getGeometryDimension(
-            String schemaName, String tableName, String columnName, Connection cx)
+    public int getGeometryDimension(String schemaName, String tableName, String columnName, Connection cx)
             throws SQLException {
         // try retrieve the dimension from geometryMetadataTable
-        Integer dimension =
-                getGeometryDimensionFromMetadataTable(schemaName, tableName, columnName, cx);
+        Integer dimension = getGeometryDimensionFromMetadataTable(schemaName, tableName, columnName, cx);
         if (dimension != null) {
             return dimension;
         }
@@ -573,8 +536,7 @@ public class SQLServerDialect extends BasicSQLDialect {
     }
 
     @Override
-    public void encodeGeometryColumn(
-            GeometryDescriptor gatt, String prefix, int srid, Hints hints, StringBuffer sql) {
+    public void encodeGeometryColumn(GeometryDescriptor gatt, String prefix, int srid, Hints hints, StringBuffer sql) {
         encodeColumnName(prefix, gatt.getLocalName(), sql);
         if (!useNativeSerialization) {
             sql.append(".STAsBinary()");
@@ -582,8 +544,7 @@ public class SQLServerDialect extends BasicSQLDialect {
     }
 
     @Override
-    public void encodeGeometryValue(Geometry value, int dimension, int srid, StringBuffer sql)
-            throws IOException {
+    public void encodeGeometryValue(Geometry value, int dimension, int srid, StringBuffer sql) throws IOException {
 
         if (value == null) {
             sql.append("NULL");
@@ -594,7 +555,11 @@ public class SQLServerDialect extends BasicSQLDialect {
         value.apply(finder);
         WKTWriter writer = new WKTWriter2(finder.hasZ() ? 3 : 2);
         String wkt = writer.write(value);
-        sql.append("geometry::STGeomFromText('").append(wkt).append("',").append(srid).append(")");
+        sql.append("geometry::STGeomFromText('")
+                .append(wkt)
+                .append("',")
+                .append(srid)
+                .append(")");
     }
 
     @Override
@@ -670,16 +635,14 @@ public class SQLServerDialect extends BasicSQLDialect {
     }
 
     @Override
-    public Envelope decodeGeometryEnvelope(ResultSet rs, int column, Connection cx)
-            throws SQLException, IOException {
+    public Envelope decodeGeometryEnvelope(ResultSet rs, int column, Connection cx) throws SQLException, IOException {
         String s = rs.getString(column);
         Geometry g = decodeGeometry(s, null);
         if (g == null) {
             return null;
         }
 
-        return new ReferencedEnvelope(
-                g.getEnvelopeInternal(), (CoordinateReferenceSystem) g.getUserData());
+        return new ReferencedEnvelope(g.getEnvelopeInternal(), (CoordinateReferenceSystem) g.getUserData());
     }
 
     @Override
@@ -687,8 +650,7 @@ public class SQLServerDialect extends BasicSQLDialect {
         return new SQLServerFilterToSQL();
     }
 
-    protected void encodeTableName(
-            String schemaName, String tableName, StringBuffer sql, boolean escape) {
+    protected void encodeTableName(String schemaName, String tableName, StringBuffer sql, boolean escape) {
         if (schemaName != null) {
             if (escape) {
                 encodeSchemaName(schemaName, sql);
@@ -814,8 +776,7 @@ public class SQLServerDialect extends BasicSQLDialect {
 
     /** Drop the index. Subclasses can override to handle extra syntax or db specific situations */
     @Override
-    public void dropIndex(
-            Connection cx, SimpleFeatureType schema, String databaseSchema, String indexName)
+    public void dropIndex(Connection cx, SimpleFeatureType schema, String databaseSchema, String indexName)
             throws SQLException {
         StringBuffer sql = new StringBuffer();
         sql.append("DROP INDEX ");
@@ -842,29 +803,25 @@ public class SQLServerDialect extends BasicSQLDialect {
 
     @Override
     public void postCreateFeatureType(
-            SimpleFeatureType featureType,
-            DatabaseMetaData md,
-            String databaseSchema,
-            Connection cx)
+            SimpleFeatureType featureType, DatabaseMetaData md, String databaseSchema, Connection cx)
             throws SQLException {
         // collect the spatial indexes (index metadata does not work properly for spatial indexes)
-        String sql =
-                "SELECT \n"
-                        + "     index_name = ind.name,\n"
-                        + "     column_name = col.name\n"
-                        + "FROM \n"
-                        + "     sys.indexes ind \n"
-                        + "INNER JOIN \n"
-                        + "     sys.index_columns ic ON  ind.object_id = ic.object_id and ind.index_id = ic.index_id \n"
-                        + "INNER JOIN \n"
-                        + "     sys.columns col ON ic.object_id = col.object_id and ic.column_id = col.column_id \n"
-                        + "INNER JOIN \n"
-                        + "     sys.tables t ON ind.object_id = t.object_id \n"
-                        + "WHERE \n"
-                        + "     ind.type_desc = 'SPATIAL'\n"
-                        + "     and t.name = '"
-                        + featureType.getTypeName()
-                        + "'";
+        String sql = "SELECT \n"
+                + "     index_name = ind.name,\n"
+                + "     column_name = col.name\n"
+                + "FROM \n"
+                + "     sys.indexes ind \n"
+                + "INNER JOIN \n"
+                + "     sys.index_columns ic ON  ind.object_id = ic.object_id and ind.index_id = ic.index_id \n"
+                + "INNER JOIN \n"
+                + "     sys.columns col ON ic.object_id = col.object_id and ic.column_id = col.column_id \n"
+                + "INNER JOIN \n"
+                + "     sys.tables t ON ind.object_id = t.object_id \n"
+                + "WHERE \n"
+                + "     ind.type_desc = 'SPATIAL'\n"
+                + "     and t.name = '"
+                + featureType.getTypeName()
+                + "'";
         ResultSet indexInfo = null;
         Statement st = null;
         Map<String, Set<String>> indexes = new HashMap<>();
@@ -992,8 +949,7 @@ public class SQLServerDialect extends BasicSQLDialect {
 
     @Override
     public Object getLastAutoGeneratedValue(
-            String schemaName, String tableName, String columnName, Connection cx, Statement st)
-            throws SQLException {
+            String schemaName, String tableName, String columnName, Connection cx, Statement st) throws SQLException {
         ResultSet rs = st.getGeneratedKeys();
         try {
             Object result = null;
@@ -1007,8 +963,7 @@ public class SQLServerDialect extends BasicSQLDialect {
     }
 
     @Override
-    public void registerAggregateFunctions(
-            Map<Class<? extends FeatureVisitor>, String> aggregates) {
+    public void registerAggregateFunctions(Map<Class<? extends FeatureVisitor>, String> aggregates) {
         super.registerAggregateFunctions(aggregates);
         aggregates.put(StandardDeviationVisitor.class, "STDEVP");
     }
@@ -1025,8 +980,7 @@ public class SQLServerDialect extends BasicSQLDialect {
     }
 
     @Override
-    public Object getNextSequenceValue(String schemaName, String sequenceName, Connection cx)
-            throws SQLException {
+    public Object getNextSequenceValue(String schemaName, String sequenceName, Connection cx) throws SQLException {
         final String sql = "SELECT " + encodeNextSequenceValue(schemaName, sequenceName);
         dataStore.getLogger().fine(sql);
 
@@ -1037,5 +991,113 @@ public class SQLServerDialect extends BasicSQLDialect {
             }
             return null;
         }
+    }
+
+    /**
+     * Returns the optimized bounds for the geometry columns of the given feature type. The bounds are extracted from
+     * the spatial indexes, if any. This method is enabled by setting the {@link #estimatedExtentsEnabled} property to
+     * true.
+     *
+     * @param schema The database schema, if any, or null
+     * @param featureType The feature type containing the geometry columns whose bounds need to computed. Mind, it may
+     *     be retyped and thus contain less geometry columns than the table
+     * @param cx The connection to the database
+     * @return A list of ReferencedEnvelope, one for each geometry column of the feature type, or {@code null} if no
+     *     bounds could be extracted from the spatial indexes
+     * @throws SQLException If there is a problem querying the database
+     */
+    @Override
+    public List<ReferencedEnvelope> getOptimizedBounds(String schema, SimpleFeatureType featureType, Connection cx)
+            throws SQLException {
+
+        if (null != dataStore.getVirtualTables().get(featureType.getTypeName())) {
+            return null;
+        }
+
+        if (!this.estimatedExtentsEnabled) {
+            // preserve pre-existing behaviour
+            return null;
+        }
+
+        // note that this will only work for geometry type indexes
+        // and not for geography type indexes
+        final List<ReferencedEnvelope> result = new ArrayList<>();
+
+        featureType.getAttributeDescriptors().stream()
+                .filter(attributeDescriptor -> attributeDescriptor instanceof GeometryDescriptor)
+                .forEach(attributeDescriptor -> {
+                    try {
+                        result.add(getIndexBounds(
+                                schema,
+                                featureType.getTypeName(),
+                                attributeDescriptor.getLocalName(),
+                                featureType.getGeometryDescriptor().getCoordinateReferenceSystem(),
+                                cx));
+                    } catch (SQLException e) {
+                        LOGGER.log(
+                                Level.WARNING,
+                                "Error while trying to get the optimized bounds for featuretype: "
+                                        + featureType.getTypeName(),
+                                e);
+                        result.add(null);
+                    }
+                });
+
+        // if no bounds were extracted from the spatial indexes, return null
+        if (result.stream().allMatch(Objects::isNull)) {
+            return null;
+        }
+        return result;
+    }
+
+    /**
+     * query spatial index for bounds information.
+     *
+     * @return the ReferencedEnvelope describing the bounds of the index, may be {@code null} when undefined
+     * @throws SQLException if there is a problem querying the database
+     */
+    private ReferencedEnvelope getIndexBounds(
+            String schema, String tableName, String columnName, CoordinateReferenceSystem crs, Connection cx)
+            throws SQLException {
+        final StringBuffer sql = new StringBuffer(
+                "SELECT sit.bounding_box_xmin, sit.bounding_box_ymin, sit.bounding_box_xmax, sit.bounding_box_ymax"
+                        // ", i.name, COL_NAME(ic.object_id, ic.column_id) AS columnName" +
+                        + " FROM sys.indexes AS i"
+                        + " INNER JOIN sys.index_columns AS ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id"
+                        + " INNER join sys.spatial_index_tessellations sit ON i.object_id = sit.object_id AND i.index_id = sit.index_id "
+                        + " WHERE i.[type] = 4 AND i.object_id = OBJECT_ID('");
+        encodeTableName(schema, tableName, sql, true);
+        sql.append("') AND ic.column_id = COLUMNPROPERTY(ic.object_id, '");
+        // encodes with quotes, which fails in T-SQL functions
+        // encodeColumnName(schema, columnName, sql);
+        sql.append(columnName).append("', 'COLUMNID');");
+
+        LOGGER.log(Level.FINE, "Optimized bounds query: " + sql);
+
+        try (Statement st = cx.createStatement();
+                ResultSet rs = st.executeQuery(sql.toString())) {
+            if (!rs.next()) {
+                LOGGER.log(Level.INFO, "No spatial index found for table: " + tableName + ", column: " + columnName);
+                return null;
+            }
+            // note that rs.getDouble() returns 0 for a null value
+            if (null == rs.getObject(1)
+                    || null == rs.getObject(2)
+                    || null == rs.getObject(3)
+                    || null == rs.getObject(4)) {
+                LOGGER.log(
+                        Level.INFO, "Spatial index bounds are null for table " + tableName + " column " + columnName);
+                return null;
+            }
+            return new ReferencedEnvelope(rs.getDouble(1), rs.getDouble(3), rs.getDouble(2), rs.getDouble(4), crs);
+        }
+    }
+
+    public boolean isEstimatedExtentsEnabled() {
+        return estimatedExtentsEnabled;
+    }
+
+    public void setEstimatedExtentsEnabled(boolean estimatedExtentsEnabled) {
+        this.estimatedExtentsEnabled = estimatedExtentsEnabled;
     }
 }

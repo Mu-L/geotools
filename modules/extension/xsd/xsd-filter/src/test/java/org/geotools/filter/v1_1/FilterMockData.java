@@ -25,6 +25,7 @@ import org.geotools.api.filter.FilterFactory;
 import org.geotools.api.filter.Id;
 import org.geotools.api.filter.Not;
 import org.geotools.api.filter.Or;
+import org.geotools.api.filter.PropertyIsBetween;
 import org.geotools.api.filter.PropertyIsEqualTo;
 import org.geotools.api.filter.PropertyIsGreaterThan;
 import org.geotools.api.filter.PropertyIsGreaterThanOrEqualTo;
@@ -74,15 +75,12 @@ public class FilterMockData {
     static FilterFactory f = (FilterFactory) CommonFactoryFinder.getFilterFactory(null);
 
     public static Id id() {
-        return f.id(
-                new LinkedHashSet<Identifier>(
-                        Arrays.asList(
-                                f.featureId("foo.1"), f.featureId("foo.2"), f.featureId("foo.3"))));
+        return f.id(new LinkedHashSet<Identifier>(
+                Arrays.asList(f.featureId("foo.1"), f.featureId("foo.2"), f.featureId("foo.3"))));
     }
 
     public static Id resourceId() {
-        ResourceIdImpl resourceId =
-                new ResourceIdImpl("foo.4", "", new Version(Version.Action.NEXT));
+        ResourceIdImpl resourceId = new ResourceIdImpl("foo.4", "", new Version(Version.Action.NEXT));
 
         resourceId.setPreviousRid("previousRid");
         resourceId.setStartTime(new Date(1000));
@@ -90,13 +88,11 @@ public class FilterMockData {
 
         Integer testInt = Integer.valueOf(1234567890);
 
-        return f.id(
-                new LinkedHashSet<Identifier>(
-                        Arrays.asList(
-                                f.featureId("foo.1", "v1"),
-                                f.resourceId("foo.2", "", new Version(new Date(1000))), //
-                                f.resourceId("foo.3", "", new Version(testInt)), //
-                                resourceId)));
+        return f.id(new LinkedHashSet<Identifier>(Arrays.asList(
+                f.featureId("foo.1", "v1"),
+                f.resourceId("foo.2", "", new Version(new Date(1000))), //
+                f.resourceId("foo.3", "", new Version(testInt)), //
+                resourceId)));
     }
 
     public static Element propertyName(Document document, Node parent) {
@@ -205,6 +201,10 @@ public class FilterMockData {
 
     public static PropertyIsGreaterThanOrEqualTo propertyIsGreaterThanOrEqualTo() {
         return f.greaterOrEqual(propertyName(), literal());
+    }
+
+    public static PropertyIsBetween propertyIsBetween() {
+        return f.between(propertyName(), literal(10), literal(20));
     }
 
     public static Element binaryComparisonOp(Document document, Node parent, QName name) {

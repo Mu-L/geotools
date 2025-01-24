@@ -137,8 +137,7 @@ public class MongoFeatureSource extends ContentFeatureSource {
 
     @Override
     @SuppressWarnings("PMD.CloseResource") // r is re-assigned, but also wrapped
-    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
-            throws IOException {
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query) throws IOException {
 
         List<Filter> postFilterList = new ArrayList<>();
         List<String> postFilterAttributes = new ArrayList<>();
@@ -224,27 +223,27 @@ public class MongoFeatureSource extends ContentFeatureSource {
     }
 
     @Override
-    protected boolean canOffset() {
+    protected boolean canOffset(Query query) {
         return true;
     }
 
     @Override
-    protected boolean canLimit() {
+    protected boolean canLimit(Query query) {
         return true;
     }
 
     @Override
-    protected boolean canRetype() {
+    protected boolean canRetype(Query query) {
         return true;
     }
 
     @Override
-    protected boolean canSort() {
+    protected boolean canSort(Query query) {
         return true;
     }
 
     @Override
-    protected boolean canFilter() {
+    protected boolean canFilter(Query query) {
         return true;
     }
 
@@ -330,11 +329,7 @@ public class MongoFeatureSource extends ContentFeatureSource {
     Filter[] splitFilter(Filter f) {
         FilterCapabilities filterCapabilities = getDataStore().getFilterCapabilities();
         MongoFilterSplitter splitter =
-                new MongoFilterSplitter(
-                        filterCapabilities,
-                        null,
-                        null,
-                        new MongoCollectionMeta(getIndexesInfoMap()));
+                new MongoFilterSplitter(filterCapabilities, null, null, new MongoCollectionMeta(getIndexesInfoMap()));
         f.accept(splitter, null);
         return new Filter[] {splitter.getFilterPre(), splitter.getFilterPost()};
     }

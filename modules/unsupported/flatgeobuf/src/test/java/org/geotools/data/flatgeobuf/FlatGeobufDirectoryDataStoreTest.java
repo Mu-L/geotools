@@ -19,6 +19,7 @@ package org.geotools.data.flatgeobuf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
@@ -52,7 +53,8 @@ import org.locationtech.jts.geom.GeometryFactory;
 
 public class FlatGeobufDirectoryDataStoreTest {
 
-    @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
+    @Rule
+    public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
     @Test
     public void dataStore() throws Exception {
@@ -65,9 +67,7 @@ public class FlatGeobufDirectoryDataStoreTest {
         for (String name : fgbNames) {
             File file = URLs.urlToFile(TestData.url(FlatGeobufDataStore.class, name + ".fgb"));
             Files.copy(
-                    file.toPath(),
-                    new File(directory, file.getName()).toPath(),
-                    StandardCopyOption.REPLACE_EXISTING);
+                    file.toPath(), new File(directory, file.getName()).toPath(), StandardCopyOption.REPLACE_EXISTING);
         }
 
         // Get a DataStore
@@ -85,45 +85,40 @@ public class FlatGeobufDirectoryDataStoreTest {
         // Make sure we can get layers
         for (String name : names) {
             SimpleFeatureSource fs = store.getFeatureSource(name);
-            assertNotNull(fs.getBounds());
+            // this FGB does not have an envelope in the header
+            assertNull(fs.getBounds());
             assertNotNull(fs.getSchema());
-            assertTrue(fs.getCount(Query.ALL) > 0);
+            // this FGB does not have a feature count in the header either
+            assertEquals(-1, fs.getCount(Query.ALL));
         }
 
         // Write a new Layer
-        SimpleFeatureType featureType =
-                DataUtilities.createType("locations", "geom:Point,name:String,id:int");
+        SimpleFeatureType featureType = DataUtilities.createType("locations", "geom:Point,name:String,id:int");
         store.createSchema(featureType);
         SimpleFeatureStore featureStore = (SimpleFeatureStore) store.getFeatureSource("locations");
         GeometryFactory gf = JTSFactoryFinder.getGeometryFactory();
-        SimpleFeature feature1 =
-                SimpleFeatureBuilder.build(
-                        featureType,
-                        new Object[] {
-                            gf.createPoint(new Coordinate(-8.349609375, 14.349547837185362)),
-                            "ABC",
-                            1
-                        },
-                        "location.1");
-        SimpleFeature feature2 =
-                SimpleFeatureBuilder.build(
-                        featureType,
-                        new Object[] {
-                            gf.createPoint(new Coordinate(-18.349609375, 24.349547837185362)),
-                            "DEF",
-                            2
-                        },
-                        "location.2");
+        SimpleFeature feature1 = SimpleFeatureBuilder.build(
+                featureType,
+                new Object[] {gf.createPoint(new Coordinate(-8.349609375, 14.349547837185362)), "ABC", 1},
+                "location.1");
+        SimpleFeature feature2 = SimpleFeatureBuilder.build(
+                featureType,
+                new Object[] {gf.createPoint(new Coordinate(-18.349609375, 24.349547837185362)), "DEF", 2},
+                "location.2");
         SimpleFeatureCollection collection = DataUtilities.collection(feature1, feature2);
         featureStore.addFeatures(collection);
-        assertEquals(2, featureStore.getCount(Query.ALL));
+        // no count in header, but we can count features one by one
+        assertEquals(-1, featureStore.getCount(Query.ALL));
+        assertEquals(2, featureStore.getFeatures(Query.ALL).size());
     }
 
     @Test
     public void removeSchema() throws Exception {
         File dir = temporaryFolder.newFolder("layers");
-        File file1 = Files.createFile(Paths.get(dir.getAbsolutePath(), "points.fgb")).toFile();
-        File file2 = Files.createFile(Paths.get(dir.getAbsolutePath(), "lines.fgb")).toFile();
+        File file1 =
+                Files.createFile(Paths.get(dir.getAbsolutePath(), "points.fgb")).toFile();
+        File file2 =
+                Files.createFile(Paths.get(dir.getAbsolutePath(), "lines.fgb")).toFile();
         Map<String, Serializable> params = new HashMap<>();
         URL url = dir.toURI().toURL();
         params.put("url", url);

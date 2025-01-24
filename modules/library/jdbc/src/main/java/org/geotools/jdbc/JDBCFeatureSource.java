@@ -67,6 +67,16 @@ import org.locationtech.jts.geom.Geometry;
 
 public class JDBCFeatureSource extends ContentFeatureSource {
 
+    /**
+     * Add this hint to the query to force the filter to be interepreted as a three-way logic filter, where null values
+     * are treated as unknowns and propagate up the filter evaluation tree (e..g, <code>A <> NULL -> NULL</code>)</>. By
+     * default, the encoding is performed using two-way logic, where null values are treated as legitimate values (like
+     * <code>null</code> in Java). Also, warning: the hint cannot be provided to
+     * {@link org.geotools.api.data.FeatureStore#removeFeatures(Filter)} as that only gets a {@link Filter} object,
+     * rather than a query object.
+     */
+    public static final Hints.Key FILTER_THREE_WAY_LOGIC = new Hints.Key(Boolean.class);
+
     private static final Logger LOGGER = Logging.getLogger(JDBCFeatureSource.class);
     private static final String REMARKS = "REMARKS";
 
@@ -126,20 +136,19 @@ public class JDBCFeatureSource extends ContentFeatureSource {
     }
 
     /**
-     * Sets the flag which will expose columns which compose a tables identifying or primary key,
-     * through feature type attributes.
+     * Sets the flag which will expose columns which compose a tables identifying or primary key, through feature type
+     * attributes.
      *
-     * <p>Note: setting this flag which affect all feature sources created from or working against
-     * the current transaction.
+     * <p>Note: setting this flag which affect all feature sources created from or working against the current
+     * transaction.
      */
     public void setExposePrimaryKeyColumns(boolean exposePrimaryKeyColumns) {
-        ((JDBCState) entry.getState(transaction))
-                .setExposePrimaryKeyColumns(exposePrimaryKeyColumns);
+        ((JDBCState) entry.getState(transaction)).setExposePrimaryKeyColumns(exposePrimaryKeyColumns);
     }
 
     /**
-     * The flag which will expose columns which compose a tables identifying or primary key, through
-     * feature type attributes.
+     * The flag which will expose columns which compose a tables identifying or primary key, through feature type
+     * attributes.
      */
     public boolean isExposePrimaryKeyColumns() {
         return ((JDBCState) entry.getState(transaction)).isExposePrimaryKeyColumns();
@@ -266,10 +275,9 @@ public class JDBCFeatureSource extends ContentFeatureSource {
 
                 // if still not found, ignore the column we don't know about
                 if (binding == null) {
-                    storeLogger.warning(
-                            "Could not find mapping for '"
-                                    + name
-                                    + "', ignoring the column and setting the feature type read only");
+                    storeLogger.warning("Could not find mapping for '"
+                            + name
+                            + "', ignoring the column and setting the feature type read only");
                     readOnly = true;
                     continue;
                 }
@@ -308,11 +316,7 @@ public class JDBCFeatureSource extends ContentFeatureSource {
                             crs = dialect.createCRS(srid, cx);
                             if (crs == null) {
                                 storeLogger.warning(
-                                        "Couldn't determine CRS of table "
-                                                + tableName
-                                                + " with srid: "
-                                                + srid
-                                                + ".");
+                                        "Couldn't determine CRS of table " + tableName + " with srid: " + srid + ".");
                             }
                         } else {
                             storeLogger.info("No srid returned of database table:" + tableName);
@@ -328,13 +332,10 @@ public class JDBCFeatureSource extends ContentFeatureSource {
                         if (virtualTable != null) {
                             dimension = virtualTable.getDimension(name);
                         } else {
-                            dimension =
-                                    dialect.getGeometryDimension(
-                                            databaseSchema, tableName, name, cx);
+                            dimension = dialect.getGeometryDimension(databaseSchema, tableName, name, cx);
                         }
                     } catch (Exception e) {
-                        String msg =
-                                "Error occured determing dimension for " + tableName + "." + name;
+                        String msg = "Error occured determing dimension for " + tableName + "." + name;
                         storeLogger.log(Level.WARNING, msg, e);
                     }
 
@@ -384,10 +385,14 @@ public class JDBCFeatureSource extends ContentFeatureSource {
 
     /** Helper method for splitting a filter. */
     protected Filter[] splitFilter(Filter original) {
-        return splitFilter(original, this);
+        return splitFilter(original, this, null);
     }
 
-    Filter[] splitFilter(Filter original, FeatureSource source) {
+    protected Filter[] splitFilter(Filter original, Hints hints) {
+        return splitFilter(original, this, hints);
+    }
+
+    static Filter[] splitFilter(Filter original, FeatureSource source, Hints hints) {
         JDBCFeatureSource featureSource = null;
         if (source instanceof JDBCFeatureSource) {
             featureSource = (JDBCFeatureSource) source;
@@ -395,21 +400,25 @@ public class JDBCFeatureSource extends ContentFeatureSource {
             featureSource = ((JDBCFeatureStore) source).getFeatureSource();
         }
 
+        // simplify first, give an opportunity to eliminate static parts that might not
+        // be otherwise supported by the datastore
+        SimplifyingFilterVisitor visitor = new SimplifyingFilterVisitor();
+        visitor.setFIDValidator(new PrimaryKeyFIDValidator(featureSource));
+        visitor.setFeatureType(source.getSchema());
+        Filter simplified = (Filter) original.accept(visitor, null);
+
         Filter[] split = new Filter[2];
         if (original != null) {
-            split = getDataStore().getSQLDialect().splitFilter(original, featureSource.getSchema());
+            JDBCDataStore dataStore = (JDBCDataStore) source.getDataStore();
+            split = dataStore.getSQLDialect().splitFilter(simplified, featureSource.getSchema());
         }
 
         // handle three-valued logic differences by adding "is not null" checks in the filter,
         // the simplifying filter visitor will take care of them if they are redundant
-        NullHandlingVisitor nhv = new NullHandlingVisitor(source.getSchema());
-        split[0] = (Filter) split[0].accept(nhv, null);
-
-        SimplifyingFilterVisitor visitor = new SimplifyingFilterVisitor();
-        visitor.setFIDValidator(new PrimaryKeyFIDValidator(featureSource));
-        visitor.setFeatureType(getSchema());
-        split[0] = (Filter) split[0].accept(visitor, null);
-        split[1] = (Filter) split[1].accept(visitor, null);
+        if (hints == null || !Boolean.TRUE.equals(hints.get(FILTER_THREE_WAY_LOGIC))) {
+            NullHandlingVisitor nhv = new NullHandlingVisitor(source.getSchema());
+            split[0] = (Filter) split[0].accept(nhv, null);
+        }
 
         return split;
     }
@@ -419,7 +428,7 @@ public class JDBCFeatureSource extends ContentFeatureSource {
         JDBCDataStore store = getDataStore();
 
         // split the filter
-        Filter[] split = splitFilter(query.getFilter());
+        Filter[] split = splitFilter(query.getFilter(), query.getHints());
         Filter preFilter = split[0];
         Filter postFilter = split[1];
 
@@ -439,8 +448,7 @@ public class JDBCFeatureSource extends ContentFeatureSource {
                 // grab a reader
                 Query preQuery = new Query(query);
                 query.setFilter(preFilter);
-                try (FeatureReader<SimpleFeatureType, SimpleFeature> preReader =
-                        getReader(preQuery)) {
+                try (FeatureReader<SimpleFeatureType, SimpleFeature> preReader = getReader(preQuery)) {
                     // wrap with post filter
                     try (FilteringFeatureReader<SimpleFeatureType, SimpleFeature> reader =
                             new FilteringFeatureReader<>(preReader, postFilter)) {
@@ -470,8 +478,7 @@ public class JDBCFeatureSource extends ContentFeatureSource {
                         if (query.getStartIndex() > count) count = 0;
                         else count -= query.getStartIndex();
                     }
-                    if (query.getMaxFeatures() > 0 && count > query.getMaxFeatures())
-                        count = query.getMaxFeatures();
+                    if (query.getMaxFeatures() > 0 && count > query.getMaxFeatures()) count = query.getMaxFeatures();
                 }
                 return count;
             } finally {
@@ -485,17 +492,15 @@ public class JDBCFeatureSource extends ContentFeatureSource {
         JDBCDataStore dataStore = getDataStore();
 
         // split the filter
-        Filter[] split = splitFilter(query.getFilter());
+        Filter[] split = splitFilter(query.getFilter(), query.getHints());
         Filter preFilter = split[0];
         Filter postFilter = split[1];
 
         try {
 
             if ((postFilter != null) && (postFilter != Filter.INCLUDE)
-                    || (query.getMaxFeatures() < Integer.MAX_VALUE && !canLimit())
-                    || (query.getStartIndex() != null
-                            && query.getStartIndex() > 0
-                            && !canOffset())) {
+                    || (query.getMaxFeatures() < Integer.MAX_VALUE && !canLimit(query))
+                    || (query.getStartIndex() != null && query.getStartIndex() > 0 && !canOffset(query))) {
                 // calculate manually, don't use datastore optimization
                 getDataStore().getLogger().fine("Calculating bounds manually");
 
@@ -538,27 +543,27 @@ public class JDBCFeatureSource extends ContentFeatureSource {
     }
 
     @Override
-    protected boolean canFilter() {
+    protected boolean canFilter(Query query) {
         return true;
     }
 
     @Override
-    protected boolean canSort() {
+    protected boolean canSort(Query query) {
         return true;
     }
 
     @Override
-    protected boolean canRetype() {
+    protected boolean canRetype(Query query) {
         return true;
     }
 
     @Override
-    protected boolean canLimit() {
+    protected boolean canLimit(Query query) {
         return getDataStore().getSQLDialect().isLimitOffsetSupported();
     }
 
     @Override
-    protected boolean canOffset() {
+    protected boolean canOffset(Query query) {
         return getDataStore().getSQLDialect().isLimitOffsetSupported();
     }
 
@@ -569,10 +574,9 @@ public class JDBCFeatureSource extends ContentFeatureSource {
 
     @Override
     @SuppressWarnings("PMD.CloseResource") // the cx is passed to the reader which will close it
-    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
-            throws IOException {
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query) throws IOException {
         // split the filter
-        Filter[] split = splitFilter(query.getFilter());
+        Filter[] split = splitFilter(query.getFilter(), query.getHints());
         Filter preFilter = split[0];
         Filter postFilter = split[1];
         boolean postFilterRequired = postFilter != null && postFilter != Filter.INCLUDE;
@@ -588,8 +592,7 @@ public class JDBCFeatureSource extends ContentFeatureSource {
 
         // Build the feature type returned by this query. Also build an eventual extra feature type
         // containing the attributes we might need in order to evaluate the post filter
-        SimpleFeatureType[] types =
-                buildQueryAndReturnFeatureTypes(getSchema(), query.getPropertyNames(), postFilter);
+        SimpleFeatureType[] types = buildQueryAndReturnFeatureTypes(getSchema(), query.getPropertyNames(), postFilter);
         SimpleFeatureType querySchema = types[0];
         SimpleFeatureType returnedSchema = types[1];
 
@@ -623,8 +626,7 @@ public class JDBCFeatureSource extends ContentFeatureSource {
                 JoinInfo join = JoinInfo.create(preQuery, this);
 
                 if (dialect instanceof PreparedStatementSQLDialect) {
-                    PreparedStatement ps =
-                            getDataStore().selectJoinSQLPS(querySchema, join, preQuery, cx);
+                    PreparedStatement ps = getDataStore().selectJoinSQLPS(querySchema, join, preQuery, cx);
                     reader = new JDBCJoiningFeatureReader(ps, cx, this, querySchema, join, query);
                 } else {
                     // build up a statement for the content
@@ -683,8 +685,7 @@ public class JDBCFeatureSource extends ContentFeatureSource {
         if (propertyNames == Query.ALL_NAMES) {
             return new SimpleFeatureType[] {featureType, featureType};
         } else {
-            SimpleFeatureType returnedSchema =
-                    SimpleFeatureTypeBuilder.retype(featureType, propertyNames);
+            SimpleFeatureType returnedSchema = SimpleFeatureTypeBuilder.retype(featureType, propertyNames);
             SimpleFeatureType querySchema = returnedSchema;
 
             if (filter != null && !filter.equals(Filter.INCLUDE)) {
@@ -695,11 +696,9 @@ public class JDBCFeatureSource extends ContentFeatureSource {
                 if (extraAttributes != null && extraAttributes.length > 0) {
                     List<String> allAttributes = new ArrayList<>(Arrays.asList(propertyNames));
                     for (String extraAttribute : extraAttributes) {
-                        if (!allAttributes.contains(extraAttribute))
-                            allAttributes.add(extraAttribute);
+                        if (!allAttributes.contains(extraAttribute)) allAttributes.add(extraAttribute);
                     }
-                    String[] allAttributeArray =
-                            allAttributes.toArray(new String[allAttributes.size()]);
+                    String[] allAttributeArray = allAttributes.toArray(new String[allAttributes.size()]);
                     querySchema = SimpleFeatureTypeBuilder.retype(getSchema(), allAttributeArray);
                 }
             }
@@ -747,8 +746,7 @@ public class JDBCFeatureSource extends ContentFeatureSource {
             return false; // optimization restricted to column evaulation
         }
         Class binding = descriptor.getType().getBinding();
-        if (Geometry.class.isAssignableFrom(binding)
-                || !(Comparable.class.isAssignableFrom(binding))) {
+        if (Geometry.class.isAssignableFrom(binding) || !(Comparable.class.isAssignableFrom(binding))) {
             // we may roll out KNN support in the dialect for geometries, but for the moment, we say
             // we can't
             return false;
@@ -780,8 +778,7 @@ public class JDBCFeatureSource extends ContentFeatureSource {
     }
 
     /** Computes the column metadata from a plain database table */
-    List<ColumnMetadata> getColumnMetadata(
-            Connection cx, String databaseSchema, String tableName, SQLDialect dialect)
+    List<ColumnMetadata> getColumnMetadata(Connection cx, String databaseSchema, String tableName, SQLDialect dialect)
             throws SQLException {
         List<ColumnMetadata> result = new ArrayList<>();
 
@@ -810,12 +807,11 @@ public class JDBCFeatureSource extends ContentFeatureSource {
          * "YES" means the column might allow NULL values. An empty string means nobody knows.
          * </UL>
          */
-        ResultSet columns =
-                metaData.getColumns(
-                        cx.getCatalog(),
-                        getDataStore().escapeNamePattern(metaData, databaseSchema),
-                        getDataStore().escapeNamePattern(metaData, tableName),
-                        "%");
+        ResultSet columns = metaData.getColumns(
+                cx.getCatalog(),
+                getDataStore().escapeNamePattern(metaData, databaseSchema),
+                getDataStore().escapeNamePattern(metaData, tableName),
+                "%");
         try {
             if (getDataStore().getFetchSize() > 0) {
                 columns.setFetchSize(getDataStore().getFetchSize());
@@ -846,8 +842,7 @@ public class JDBCFeatureSource extends ContentFeatureSource {
 
     /** Computes the column metadata by running the virtual table query */
     static List<ColumnMetadata> getColumnMetadata(
-            Connection cx, VirtualTable vtable, SQLDialect dialect, JDBCDataStore store)
-            throws SQLException {
+            Connection cx, VirtualTable vtable, SQLDialect dialect, JDBCDataStore store) throws SQLException {
         List<ColumnMetadata> result = new ArrayList<>();
 
         Statement st = null;

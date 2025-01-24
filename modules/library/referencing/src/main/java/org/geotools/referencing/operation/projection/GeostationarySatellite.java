@@ -43,11 +43,10 @@ import si.uom.SI;
  *
  * <p>Adapted from https://github.com/OSGeo/proj.4/blob/4.9/src/PJ_geos.c
  *
- * <p>NOTE: Not all valid coordinates in this projection will transform to valid terrestrial
- * coordinates, this is especially true of "Full Disk" earth coverages. If one must deal with
- * coverages in this projection with generalized code which requires the coverage bounding-box
- * coordinates to transform to valid terrestrial values consider clipping to a rectangle inscribing
- * the ellipsoid.
+ * <p>NOTE: Not all valid coordinates in this projection will transform to valid terrestrial coordinates, this is
+ * especially true of "Full Disk" earth coverages. If one must deal with coverages in this projection with generalized
+ * code which requires the coverage bounding-box coordinates to transform to valid terrestrial values consider clipping
+ * to a rectangle inscribing the ellipsoid.
  *
  * @author Tom Kunicki
  */
@@ -59,9 +58,9 @@ public abstract class GeostationarySatellite extends MapProjection {
     final double radius_g;
     final double radius_g_1;
     final double C;
+    final boolean flip_axis;
 
-    public GeostationarySatellite(ParameterValueGroup parameters)
-            throws ParameterNotFoundException {
+    public GeostationarySatellite(ParameterValueGroup parameters) throws ParameterNotFoundException {
         super(parameters);
 
         final Collection<GeneralParameterDescriptor> expected =
@@ -80,6 +79,50 @@ public abstract class GeostationarySatellite extends MapProjection {
         radius_g_1 = h / a;
         radius_g = 1d + radius_g_1;
         C = radius_g * radius_g - 1d;
+
+        flip_axis = doubleValue(expected, Provider.SWEEP, parameters) == 0;
+    }
+
+    /**
+     * Transform a satellite view angle to coordinates in the Geostationary projection. Based on
+     * https://github.com/OSGeo/proj.4/blob/5.2/src/PJ_geos.c
+     *
+     * @param Vx X component of the satellite view vector.
+     * @param Vy Y component of the satellite view vector.
+     * @param Vz Z component of the satellite view vector.
+     * @param xy A point whose location is set to the coordinates in this projection.
+     * @return xy for convenience.
+     */
+    final Point2D transformViewVectorToCoordinates(double Vx, double Vy, double Vz, Point2D xy) {
+        double tmp = radius_g - Vx;
+        if (flip_axis) {
+            xy.setLocation(radius_g_1 * Math.atan(Vy / Math.hypot(Vz, tmp)), radius_g_1 * Math.atan(Vz / tmp));
+        } else {
+            xy.setLocation(radius_g_1 * Math.atan(Vy / tmp), radius_g_1 * Math.atan(Vz / Math.hypot(Vy, tmp)));
+        }
+        return xy;
+    }
+
+    /**
+     * Transforms these coordinates to the initialization vector for calculating the satellite view vector.
+     *
+     * @param x The X coordinate on Earth.
+     * @param y The Y coordinate on Earth.
+     * @param yz A point whose location is set to the Y and Z initializers of the view vector.
+     * @return yz for convenience.
+     */
+    final Point2D transformCoordinatesToViewVectorInitializer(double x, double y, Point2D yz) {
+        double Vy;
+        double Vz;
+        if (flip_axis) {
+            Vz = Math.tan(y / radius_g_1);
+            Vy = Math.tan(x / radius_g_1) * Math.hypot(1., Vz);
+        } else {
+            Vy = Math.tan(x / radius_g_1);
+            Vz = Math.tan(y / radius_g_1) * Math.hypot(1., Vy);
+        }
+        yz.setLocation(Vy, Vz);
+        return yz;
     }
 
     @Override
@@ -93,7 +136,27 @@ public abstract class GeostationarySatellite extends MapProjection {
         final ParameterDescriptorGroup descriptor = getParameterDescriptors();
         final Collection<GeneralParameterDescriptor> expected = descriptor.descriptors();
         set(expected, Provider.SATELLITE_HEIGHT, values, h);
+        set(expected, Provider.SWEEP, values, flip_axis ? 0 : 1);
         return values;
+    }
+
+    @Override
+    public boolean equals(final Object object) {
+        if (super.equals(object)) {
+            GeostationarySatellite that = (GeostationarySatellite) object;
+            // Other parameters are derived from these two, plus others already checked in
+            // super.equals().
+            return h == that.h && flip_axis == that.flip_axis;
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        long code = super.hashCode();
+        code = code * 37 + Double.doubleToLongBits(h);
+        code = code * 37 + Boolean.hashCode(flip_axis);
+        return (int) code ^ (int) (code >>> 32);
     }
 
     public static class Spherical extends GeostationarySatellite {
@@ -112,8 +175,7 @@ public abstract class GeostationarySatellite extends MapProjection {
         }
 
         @Override
-        protected Point2D transformNormalized(double lambda, double phi, Point2D p2d)
-                throws ProjectionException {
+        protected Point2D transformNormalized(double lambda, double phi, Point2D p2d) throws ProjectionException {
             // from https://github.com/OSGeo/proj.4/blob/4.9/src/PJ_geos.c
             /* Calculation of the three components of the vector from satellite to
              ** position on earth surface (lon,lat).*/
@@ -125,24 +187,17 @@ public abstract class GeostationarySatellite extends MapProjection {
             if (((radius_g - Vx) * Vx - Vy * Vy - Vz * Vz) < 0.) {
                 throw new ProjectionException();
             }
-            /* Calculation based on view angles from satellite.*/
-            tmp = radius_g - Vx;
-            double x = radius_g_1 * Math.atan(Vy / tmp);
-            double y = radius_g_1 * Math.atan(Vz / Math.hypot(Vy, tmp));
-
-            p2d.setLocation(x, y);
-
-            return p2d;
+            return transformViewVectorToCoordinates(Vx, Vy, Vz, p2d);
         }
 
         @Override
-        protected Point2D inverseTransformNormalized(double x, double y, Point2D p2d)
-                throws ProjectionException {
+        protected Point2D inverseTransformNormalized(double x, double y, Point2D p2d) throws ProjectionException {
             // from https://github.com/OSGeo/proj.4/blob/4.9/src/PJ_geos.c
             /* Setting three components of vector from satellite to position.*/
             double Vx = -1.;
-            double Vy = Math.tan(x / (radius_g - 1.));
-            double Vz = Math.tan(y / (radius_g - 1.)) * Math.sqrt(1. + Vy * Vy);
+            transformCoordinatesToViewVectorInitializer(x, y, p2d);
+            double Vy = p2d.getX();
+            double Vz = p2d.getY();
             /* Calculation of terms in cubic equation and determinant.*/
             double a = Vy * Vy + Vz * Vz + Vx * Vx;
             double b = 2. * radius_g * Vx;
@@ -193,8 +248,7 @@ public abstract class GeostationarySatellite extends MapProjection {
         }
 
         @Override
-        protected Point2D transformNormalized(double lambda, double phi, Point2D p2d)
-                throws ProjectionException {
+        protected Point2D transformNormalized(double lambda, double phi, Point2D p2d) throws ProjectionException {
             // from https://github.com/OSGeo/proj.4/blob/4.9/src/PJ_geos.c
             /* Calculation of geocentric latitude. */
             phi = Math.atan(radius_p2 * Math.tan(phi));
@@ -208,24 +262,17 @@ public abstract class GeostationarySatellite extends MapProjection {
             if (((radius_g - Vx) * Vx - Vy * Vy - Vz * Vz * radius_p_inv2) < 0.) {
                 throw new ProjectionException();
             }
-            /* Calculation based on view angles from satellite. */
-            double tmp = radius_g - Vx;
-            double x = radius_g_1 * Math.atan(Vy / tmp);
-            double y = radius_g_1 * Math.atan(Vz / Math.hypot(Vy, tmp));
-
-            p2d.setLocation(x, y);
-
-            return p2d;
+            return transformViewVectorToCoordinates(Vx, Vy, Vz, p2d);
         }
 
         @Override
-        protected Point2D inverseTransformNormalized(double x, double y, Point2D p2d)
-                throws ProjectionException {
+        protected Point2D inverseTransformNormalized(double x, double y, Point2D p2d) throws ProjectionException {
             // from https://github.com/OSGeo/proj.4/blob/4.9/src/PJ_geos.c
             /* Setting three components of vector from satellite to position.*/
             double Vx = -1.;
-            double Vy = Math.tan(x / radius_g_1);
-            double Vz = Math.tan(y / radius_g_1) * Math.hypot(1., Vy);
+            transformCoordinatesToViewVectorInitializer(x, y, p2d);
+            double Vy = p2d.getX();
+            double Vz = p2d.getY();
             /* Calculation of terms in cubic equation and determinant.*/
             double a = Vz / radius_p;
             a = Vy * Vy + a * a + Vx * Vx;
@@ -294,8 +341,7 @@ public abstract class GeostationarySatellite extends MapProjection {
     }
 
     /**
-     * Inscribed rectangle for for full disk earth image (not largest inscribing rectangle but
-     * close, hence "Estimate")
+     * Inscribed rectangle for for full disk earth image (not largest inscribing rectangle but close, hence "Estimate")
      */
     public static Bounds inscribeFullDiskEstimate(CoordinateReferenceSystem geosCRS)
             throws TransformException, FactoryException {
@@ -329,30 +375,33 @@ public abstract class GeostationarySatellite extends MapProjection {
 
     public static class Provider extends MapProjection.AbstractProvider {
 
-        static final ParameterDescriptor SATELLITE_HEIGHT =
-                createDescriptor(
-                        new NamedIdentifier[] {
-                            new NamedIdentifier(Citations.OGC, "satellite_height"),
-                        },
-                        35785831, // default
-                        0.0, // minimum
-                        Double.POSITIVE_INFINITY, // maximum
-                        SI.METRE);
+        public static final ParameterDescriptor SATELLITE_HEIGHT = createDescriptor(
+                new NamedIdentifier[] {
+                    new NamedIdentifier(Citations.OGC, "satellite_height"), new NamedIdentifier(Citations.PROJ, "h")
+                },
+                35785831, // default
+                0.0, // minimum
+                Double.POSITIVE_INFINITY, // maximum
+                SI.METRE);
 
-        static final ParameterDescriptorGroup PARAMETERS =
-                createDescriptorGroup(
-                        new NamedIdentifier[] {
-                            new NamedIdentifier(Citations.OGC, "GEOS"),
-                            new NamedIdentifier(Citations.OGC, "Geostationary_Satellite")
-                        },
-                        new ParameterDescriptor[] {
-                            SEMI_MAJOR,
-                            SEMI_MINOR,
-                            CENTRAL_MERIDIAN,
-                            SATELLITE_HEIGHT,
-                            FALSE_EASTING,
-                            FALSE_NORTHING
-                        });
+        static final ParameterDescriptor<Double> SWEEP = createDescriptor(
+                new NamedIdentifier[] {
+                    new NamedIdentifier(Citations.OGC, "sweep"),
+                },
+                1, // default
+                0, // minimum
+                1, // maximum
+                null);
+
+        static final ParameterDescriptorGroup PARAMETERS = createDescriptorGroup(
+                new NamedIdentifier[] {
+                    new NamedIdentifier(Citations.OGC, "GEOS"),
+                    new NamedIdentifier(Citations.OGC, "Geostationary_Satellite"),
+                    new NamedIdentifier(Citations.PROJ, "geos")
+                },
+                new ParameterDescriptor[] {
+                    SEMI_MAJOR, SEMI_MINOR, CENTRAL_MERIDIAN, SATELLITE_HEIGHT, FALSE_EASTING, FALSE_NORTHING, SWEEP
+                });
 
         public Provider() {
             super(PARAMETERS);

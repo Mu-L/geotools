@@ -38,8 +38,7 @@ import org.geotools.factory.CommonFactoryFinder;
 import org.geotools.util.factory.GeoTools;
 
 /**
- * Provides a Java representation of an SLD TextSymbolizer that defines how text symbols should be
- * rendered.
+ * Provides a Java representation of an SLD TextSymbolizer that defines how text symbols should be rendered.
  *
  * @author Ian Turton, CCG
  * @author Johann Sorel (Geomatys)
@@ -67,8 +66,7 @@ public class TextSymbolizerImpl extends AbstractSymbolizer implements TextSymbol
         this(factory, null, null, null);
     }
 
-    protected TextSymbolizerImpl(
-            FilterFactory factory, Description desc, String name, Unit<Length> uom) {
+    protected TextSymbolizerImpl(FilterFactory factory, Description desc, String name, Unit<Length> uom) {
         super(name, desc, (Expression) null, uom);
         this.filterFactory = factory;
         fill = new FillImpl(factory);
@@ -134,8 +132,8 @@ public class TextSymbolizerImpl extends AbstractSymbolizer implements TextSymbol
     }
 
     /**
-     * A halo fills an extended area outside the glyphs of a rendered text label to make the label
-     * easier to read over a background.
+     * A halo fills an extended area outside the glyphs of a rendered text label to make the label easier to read over a
+     * background.
      */
     @Override
     public Halo getHalo() {
@@ -176,8 +174,7 @@ public class TextSymbolizerImpl extends AbstractSymbolizer implements TextSymbol
     }
 
     /**
-     * A pointPlacement specifies how a text element should be rendered relative to its geometric
-     * point.
+     * A pointPlacement specifies how a text element should be rendered relative to its geometric point.
      *
      * @return Value of property labelPlacement.
      */
@@ -306,18 +303,23 @@ public class TextSymbolizerImpl extends AbstractSymbolizer implements TextSymbol
         } else if (symbolizer instanceof TextSymbolizerImpl) {
             return (TextSymbolizerImpl) symbolizer;
         } else {
-            org.geotools.api.style.TextSymbolizer textSymbolizer =
-                    (org.geotools.api.style.TextSymbolizer) symbolizer;
+            org.geotools.api.style.TextSymbolizer textSymbolizer = (org.geotools.api.style.TextSymbolizer) symbolizer;
             TextSymbolizerImpl copy = new TextSymbolizerImpl();
             copy.setDescription(textSymbolizer.getDescription());
             copy.setFill(textSymbolizer.getFill());
-            copy.setFont(textSymbolizer.getFont());
+            if (textSymbolizer.fonts() != null) copy.fonts().addAll(textSymbolizer.fonts());
             copy.setGeometryPropertyName(textSymbolizer.getGeometryPropertyName());
             copy.setHalo(textSymbolizer.getHalo());
             copy.setLabel(textSymbolizer.getLabel());
             copy.setLabelPlacement(textSymbolizer.getLabelPlacement());
             copy.setName(textSymbolizer.getName());
             copy.setUnitOfMeasure(textSymbolizer.getUnitOfMeasure());
+            copy.setPriority(textSymbolizer.getPriority());
+            copy.setGraphic(textSymbolizer.getGraphic());
+            copy.setOtherText(textSymbolizer.getOtherText());
+            copy.setFeatureDescription(textSymbolizer.getFeatureDescription());
+            copy.setSnippet(textSymbolizer.getSnippet());
+            if (textSymbolizer.getOptions() != null) copy.getOptions().putAll(textSymbolizer.getOptions());
 
             return copy;
         }

@@ -40,11 +40,10 @@ public class MongoFilterSplitter extends PostPreProcessFilterSplittingVisitor {
     /**
      * Create a new instance.
      *
-     * @param fcs The FilterCapabilties that describes what Filters/Expressions the server can
-     *     process.
+     * @param fcs The FilterCapabilties that describes what Filters/Expressions the server can process.
      * @param parent The FeatureType that this filter involves. Why is this needed?
-     * @param transactionAccessor If the transaction is handled on the client and not the server
-     *     then different filters must be sent to the server. This class provides a generic way of
+     * @param transactionAccessor If the transaction is handled on the client and not the server then different filters
+     *     must be sent to the server. This class provides a generic way of
      */
     public MongoFilterSplitter(
             FilterCapabilities fcs,
@@ -59,15 +58,13 @@ public class MongoFilterSplitter extends PostPreProcessFilterSplittingVisitor {
     protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter) {
         Expression expression1 = filter.getExpression1();
         Expression expression2 = filter.getExpression2();
-        if ((expression1 instanceof JsonSelectFunction
-                || expression1 instanceof JsonSelectAllFunction)) {
+        if ((expression1 instanceof JsonSelectFunction || expression1 instanceof JsonSelectAllFunction)) {
             if (expression2 instanceof Literal) {
                 preStack.push(filter);
             } else {
                 postStack.push(filter);
             }
-        } else if ((expression2 instanceof JsonSelectFunction
-                || expression2 instanceof JsonSelectAllFunction)) {
+        } else if ((expression2 instanceof JsonSelectFunction || expression2 instanceof JsonSelectAllFunction)) {
             if (expression1 instanceof Literal) {
                 preStack.push(filter);
             } else {
@@ -80,26 +77,38 @@ public class MongoFilterSplitter extends PostPreProcessFilterSplittingVisitor {
 
     @Override
     protected void visitBinarySpatialOperator(BinarySpatialOperator filter) {
-        // DWithin is delegated to $near operator, which requires geospatial index and works only
-        // with points,
-        // if either condition is not met delegation will not happen
         Expression expression2 = filter.getExpression2();
-        if (filter instanceof DWithin
-                && expression2 != null
-                && expression2.evaluate(null, Geometry.class) instanceof Point) {
-            if (mongoCollectionMeta != null
-                    && StringUtils.equalsAny(
-                            mongoCollectionMeta
-                                    .getIndexes()
-                                    .get(filter.getExpression1().toString()),
-                            "2dsphere",
-                            "2d")) {
-                super.visitBinarySpatialOperator(filter);
+        if (filter instanceof DWithin) {
+            if (expression2 != null) {
+                Geometry geometry = expression2.evaluate(null, Geometry.class);
+                if (geometry instanceof Point) {
+                    processPoint(filter);
+                } else {
+                    preStack.push(filter);
+                }
                 return;
             }
-            postStack.push(filter);
-        } else {
+        }
+        super.visitBinarySpatialOperator(filter);
+    }
+
+    /**
+     * Checking for presence of spatial index, because DWithin with point will be delegated to $near operator, which
+     * requires geospatial index. Otherwise, will delegate to memory.
+     *
+     * @param filter
+     */
+    private void processPoint(BinarySpatialOperator filter) {
+        if (mongoCollectionMeta != null
+                && StringUtils.equalsAny(
+                        mongoCollectionMeta
+                                .getIndexes()
+                                .get(filter.getExpression1().toString()),
+                        "2dsphere",
+                        "2d")) {
             super.visitBinarySpatialOperator(filter);
+        } else {
+            postStack.push(filter);
         }
     }
 

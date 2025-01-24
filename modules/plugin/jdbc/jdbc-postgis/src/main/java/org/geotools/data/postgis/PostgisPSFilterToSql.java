@@ -29,6 +29,7 @@ import org.geotools.api.filter.spatial.BinarySpatialOperator;
 import org.geotools.api.filter.spatial.DistanceBufferOperator;
 import org.geotools.filter.FilterCapabilities;
 import org.geotools.jdbc.PreparedFilterToSQL;
+import org.geotools.util.Version;
 
 public class PostgisPSFilterToSql extends PreparedFilterToSQL {
 
@@ -38,6 +39,11 @@ public class PostgisPSFilterToSql extends PreparedFilterToSQL {
     public PostgisPSFilterToSql(PostGISPSDialect dialect) {
         super(dialect);
         helper = new FilterToSqlHelper(this);
+    }
+
+    public PostgisPSFilterToSql(PostGISPSDialect dialect, Version pgVersion) {
+        super(dialect);
+        helper = new FilterToSqlHelper(this, pgVersion);
     }
 
     public boolean isLooseBBOXEnabled() {
@@ -63,11 +69,7 @@ public class PostgisPSFilterToSql extends PreparedFilterToSQL {
 
     @Override
     protected Object visitBinarySpatialOperator(
-            BinarySpatialOperator filter,
-            PropertyName property,
-            Literal geometry,
-            boolean swapped,
-            Object extraData) {
+            BinarySpatialOperator filter, PropertyName property, Literal geometry, boolean swapped, Object extraData) {
         helper.out = out;
         return helper.visitBinarySpatialOperator(filter, property, geometry, swapped, extraData);
     }

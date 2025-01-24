@@ -80,10 +80,7 @@ public class FeatureTypeStyleBuilder extends AbstractStyleBuilder<FeatureTypeSty
         return description;
     }
 
-    /**
-     * Accumulates another feature type name in the list of the feature type names for this {@link
-     * FeatureTypeStyle}
-     */
+    /** Accumulates another feature type name in the list of the feature type names for this {@link FeatureTypeStyle} */
     public FeatureTypeStyleBuilder featureTypeName(String featureTypeName) {
         this.featureTypeNames.add(new NameImpl(featureTypeName));
         return this;
@@ -117,6 +114,7 @@ public class FeatureTypeStyleBuilder extends AbstractStyleBuilder<FeatureTypeSty
     }
 
     public void setFeatureTypeNames(List<Name> featureTypeNames) {
+        this.featureTypeNames.clear();
         this.featureTypeNames.addAll(featureTypeNames);
     }
 
@@ -143,10 +141,7 @@ public class FeatureTypeStyleBuilder extends AbstractStyleBuilder<FeatureTypeSty
         return this;
     }
 
-    /**
-     * Accumulates another feature type name in the list of the feature type names for this {@link
-     * FeatureTypeStyle}
-     */
+    /** Accumulates another feature type name in the list of the feature type names for this {@link FeatureTypeStyle} */
     public FeatureTypeStyleBuilder featureTypeName(Name featureTypeName) {
         this.featureTypeNames.add(featureTypeName);
         unset = false;
@@ -163,13 +158,7 @@ public class FeatureTypeStyleBuilder extends AbstractStyleBuilder<FeatureTypeSty
             list.add(ruleBuilder.build());
         }
         FeatureTypeStyle fts =
-                sf.featureTypeStyle(
-                        name,
-                        description.build(),
-                        definedFor.build(),
-                        featureTypeNames,
-                        types,
-                        list);
+                sf.featureTypeStyle(name, description.build(), definedFor.build(), featureTypeNames, types, list);
         if (!options.isEmpty()) {
             fts.getOptions().putAll(options);
         }

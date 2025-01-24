@@ -20,6 +20,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
@@ -32,8 +35,7 @@ import org.geotools.util.factory.GeoTools;
 import org.geotools.util.logging.Logging;
 
 /**
- * A simple {@link HTTPClient} that creates a new {@link HttpURLConnection HTTP connection} for each
- * request.
+ * A simple {@link HTTPClient} that creates a new {@link HttpURLConnection HTTP connection} for each request.
  *
  * @author groldan
  */
@@ -43,10 +45,11 @@ public class SimpleHttpClient extends AbstractHttpClient implements HTTPProxy {
 
     private static final int DEFAULT_TIMEOUT = 30; // 30 seconds
 
-    /**
-     * A SimpleHttpClient should be initiated by a call to
-     * HTTPFactoryFinder.getHttpClientFactory().getClient();
-     */
+    /** Max number of attempts to follow a redirect to avoid redirect loop * */
+    private static final int MAX_FOLLOW_REDIRECT =
+            Integer.getInteger("org.geotools.http.simpleHttpClient.maxFollowRedirect", 16);
+
+    /** A SimpleHttpClient should be initiated by a call to HTTPFactoryFinder.getHttpClientFactory().getClient(); */
     public SimpleHttpClient() {
         this.connectTimeout = DEFAULT_TIMEOUT;
         this.readTimeout = DEFAULT_TIMEOUT;
@@ -66,12 +69,11 @@ public class SimpleHttpClient extends AbstractHttpClient implements HTTPProxy {
         if (isFile(url)) {
             return this.createFileResponse(url);
         }
-        URLConnection connection = openConnection(url, headers);
-        if (connection instanceof HttpURLConnection) {
-            ((HttpURLConnection) connection).setRequestMethod("GET");
-        }
-        connection.connect();
 
+        URLConnection connection = this.get(url, headers, 0);
+        if (connection == null) {
+            return null;
+        }
         return new DefaultHttpResponse(connection);
     }
 
@@ -84,10 +86,7 @@ public class SimpleHttpClient extends AbstractHttpClient implements HTTPProxy {
     /** @see org.geotools.http.HTTPClient#post(URL, InputStream, String) */
     @Override
     public HTTPResponse post(
-            final URL url,
-            final InputStream postContent,
-            final String postContentType,
-            Map<String, String> headers)
+            final URL url, final InputStream postContent, final String postContentType, Map<String, String> headers)
             throws IOException {
 
         if (headers == null) {
@@ -118,8 +117,30 @@ public class SimpleHttpClient extends AbstractHttpClient implements HTTPProxy {
         return new DefaultHttpResponse(connection);
     }
 
-    private URLConnection openConnection(URL finalURL, Map<String, String> headers)
-            throws IOException {
+    private URLConnection get(URL url, Map<String, String> headers, int redirectionCount) throws IOException {
+
+        URLConnection connection = openConnection(url, headers);
+        if (connection instanceof HttpURLConnection) {
+            ((HttpURLConnection) connection).setRequestMethod("GET");
+        }
+        connection.connect();
+
+        if (connection instanceof HttpURLConnection) {
+            HttpURLConnection httpConnection = (HttpURLConnection) connection;
+            if (hasRedirect(httpConnection.getResponseCode())) {
+                return this.followRedirect(httpConnection, headers, redirectionCount);
+            }
+        }
+
+        return connection;
+    }
+
+    private URLConnection openConnection(URL finalURL, Map<String, String> headers) throws IOException {
+        Map<String, String> extraParams = getExtraParams();
+        if (!extraParams.isEmpty()) {
+            finalURL = appendURL(finalURL, extraParams);
+        }
+
         URLConnection connection = finalURL.openConnection();
         final boolean http = connection instanceof HttpURLConnection;
         if (headers == null) {
@@ -127,6 +148,7 @@ public class SimpleHttpClient extends AbstractHttpClient implements HTTPProxy {
         } else {
             headers = new HashMap<>(headers); // avoid parameter modification
         }
+
         if (http && tryGzip) {
             headers.put("Accept-Encoding", "gzip");
         }
@@ -144,8 +166,7 @@ public class SimpleHttpClient extends AbstractHttpClient implements HTTPProxy {
         if (http && username != null && password != null) {
             String userpassword = username + ":" + password;
             String encodedAuthorization =
-                    Base64.encodeBytes(
-                            userpassword.getBytes(StandardCharsets.UTF_8), Base64.DONT_BREAK_LINES);
+                    Base64.encodeBytes(userpassword.getBytes(StandardCharsets.UTF_8), Base64.DONT_BREAK_LINES);
             headers.put("Authorization", "Basic " + encodedAuthorization);
         }
 
@@ -155,14 +176,37 @@ public class SimpleHttpClient extends AbstractHttpClient implements HTTPProxy {
         for (Map.Entry<String, String> headerNameValue : headers.entrySet()) {
             if (LOGGER.isLoggable(Level.FINE)) {
                 LOGGER.log(
-                        Level.FINE,
-                        "Setting header "
-                                + headerNameValue.getKey()
-                                + " = "
-                                + headerNameValue.getValue());
+                        Level.FINE, "Setting header " + headerNameValue.getKey() + " = " + headerNameValue.getValue());
             }
             connection.setRequestProperty(headerNameValue.getKey(), headerNameValue.getValue());
         }
         return connection;
+    }
+
+    private static boolean hasRedirect(int responseCode) {
+        return responseCode == HttpURLConnection.HTTP_SEE_OTHER
+                || responseCode == HttpURLConnection.HTTP_MOVED_PERM
+                || responseCode == HttpURLConnection.HTTP_MOVED_TEMP;
+    }
+
+    private URLConnection followRedirect(
+            HttpURLConnection connection, Map<String, String> headers, int redirectionCount) throws IOException {
+        String redirect = connection.getHeaderField("Location");
+        if (redirect == null) {
+            LOGGER.warning("Tried to follow redirect but no url was provided in Location header");
+        } else if (redirectionCount < MAX_FOLLOW_REDIRECT) {
+            redirectionCount++;
+            try {
+                URL redirectURL = new URI(redirect).toURL();
+                LOGGER.fine("Following redirect to " + redirect);
+                return this.get(redirectURL, headers, redirectionCount);
+            } catch (URISyntaxException | MalformedURLException uri) {
+                LOGGER.warning("Tried to follow redirect but invalid url was provided in Location header: " + redirect);
+            }
+        } else {
+            LOGGER.warning(
+                    "Max number of follow redirect attempts (" + MAX_FOLLOW_REDIRECT + ") reached. Returning null");
+        }
+        return null;
     }
 }

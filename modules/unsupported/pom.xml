@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.geotools</groupId>
     <artifactId>modules</artifactId>
-    <version>31-SNAPSHOT</version>
+    <version>33-SNAPSHOT</version>
   </parent>
   <!-- =========================================================== -->
   <!-- Module Description -->
@@ -41,13 +41,12 @@
     <module>ogr</module>
     <module>postgis-raster</module>
     <module>tpk</module>
-    <module>cql-json</module>
     <module>vsi</module>
-    <module>cql2</module>
     <module>jdbc-teradata</module>
     <module>stac-store</module>
     <module>vector-mosaic</module>
     <module>jdbc-h2gis</module>
+    <module>graticules</module>
   </modules>
   <profiles>
     <!-- ================================================== -->
@@ -130,17 +129,6 @@
       </modules>
     </profile>
     <profile>
-      <id>geobuf</id>
-      <activation>
-        <property>
-          <name>all</name>
-        </property>
-      </activation>
-      <modules>
-        <module>geobuf</module>
-      </modules>
-    </profile>
-    <profile>
       <id>flatgeobuf</id>
       <activation>
         <property>
@@ -193,6 +181,12 @@
       </modules>
     </profile>
     <profile>
+      <id>graticules</id>
+      <modules>
+        <module>graticules</module>
+      </modules>
+    </profile>
+    <profile>
       <id>unsupported</id>
       <activation>
         <property>
@@ -209,6 +203,7 @@
         <module>vpf</module>
         <module>vsi</module>
         <module>jdbc-teradata</module>
+        <module>graticules</module>
       </modules>
     </profile>
     <profile>

@@ -24,6 +24,9 @@ import java.awt.image.RenderedImage;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.media.jai.PlanarImage;
 import javax.swing.JFrame;
 import org.apache.commons.io.FileUtils;
@@ -67,9 +70,7 @@ final class TestUtils extends Assert {
 
         if (values != null)
             for (GeneralParameterValue pv : values) {
-                if (pv.getDescriptor()
-                        .getName()
-                        .equals(AbstractGridFormat.READ_GRIDGEOMETRY2D.getName())) {
+                if (pv.getDescriptor().getName().equals(AbstractGridFormat.READ_GRIDGEOMETRY2D.getName())) {
 
                     Parameter<GridGeometry2D> param = (Parameter<GridGeometry2D>) pv;
                     // check envelope if it has been requested
@@ -79,11 +80,9 @@ final class TestUtils extends Assert {
                     CoordinateReferenceSystem coverageCRS = coverage.getCoordinateReferenceSystem();
                     boolean equalsIgnoreMetadata = CRS.equalsIgnoreMetadata(envCRS, coverageCRS);
                     if (!equalsIgnoreMetadata) {
-                        MathTransform destinationToSourceTransform =
-                                CRS.findMathTransform(envCRS, coverageCRS, true);
+                        MathTransform destinationToSourceTransform = CRS.findMathTransform(envCRS, coverageCRS, true);
                         equalsIgnoreMetadata =
-                                destinationToSourceTransform != null
-                                        && destinationToSourceTransform.isIdentity();
+                                destinationToSourceTransform != null && destinationToSourceTransform.isIdentity();
                     }
                     assertTrue(equalsIgnoreMetadata);
                 }
@@ -102,24 +101,20 @@ final class TestUtils extends Assert {
     }
 
     /**
-     * Tests the creation of a {@link GridCoverage2D} using the provided {@link ImageMosaicReader}
-     * as well as the provided {@link ParameterValue}.
+     * Tests the creation of a {@link GridCoverage2D} using the provided {@link ImageMosaicReader} as well as the
+     * provided {@link ParameterValue}.
      *
      * @param reader to use for creating a {@link GridCoverage2D}.
      * @param value that control the actions to take for creating a {@link GridCoverage2D}.
      * @param title to print out as the head of the frame in case we visualize it.
      */
-    static GridCoverage2D checkCoverage(
-            final ImageMosaicReader reader, GeneralParameterValue[] values, String title)
+    static GridCoverage2D checkCoverage(final ImageMosaicReader reader, GeneralParameterValue[] values, String title)
             throws IOException {
         return checkCoverage(reader, values, title, null);
     }
 
     static GridCoverage2D checkCoverage(
-            final ImageMosaicReader reader,
-            GeneralParameterValue[] values,
-            String title,
-            Rectangle rect)
+            final ImageMosaicReader reader, GeneralParameterValue[] values, String title, Rectangle rect)
             throws IOException {
         // Test the coverage
         final GridCoverage2D coverage = getCoverage(reader, values, true);
@@ -131,9 +126,7 @@ final class TestUtils extends Assert {
     }
 
     static GridCoverage2D getCoverage(
-            final ImageMosaicReader reader,
-            GeneralParameterValue[] values,
-            final boolean checkForNull)
+            final ImageMosaicReader reader, GeneralParameterValue[] values, final boolean checkForNull)
             throws IOException {
         final GridCoverage2D coverage = reader.read(values);
         if (checkForNull) {
@@ -148,10 +141,8 @@ final class TestUtils extends Assert {
      * @param testURL points to a shapefile that is the index of a certain mosaic.
      * @return a suitable {@link AbstractGridFormat}.
      */
-    static AbstractGridFormat getFormat(URL testURL)
-            throws NoSuchAuthorityCodeException, FactoryException {
-        final Hints hints =
-                new Hints(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM, CRS.decode("EPSG:4326", true));
+    static AbstractGridFormat getFormat(URL testURL) throws NoSuchAuthorityCodeException, FactoryException {
+        final Hints hints = new Hints(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM, CRS.decode("EPSG:4326", true));
         return getFormat(testURL, hints);
     }
 
@@ -172,11 +163,10 @@ final class TestUtils extends Assert {
     }
 
     /**
-     * returns an {@link AbstractGridCoverage2DReader} for the provided {@link URL} and for the
-     * providede {@link AbstractGridFormat}.
+     * returns an {@link AbstractGridCoverage2DReader} for the provided {@link URL} and for the providede
+     * {@link AbstractGridFormat}.
      *
-     * @param testURL points to a valid object to create an {@link AbstractGridCoverage2DReader}
-     *     for.
+     * @param testURL points to a valid object to create an {@link AbstractGridCoverage2DReader} for.
      * @param format to use for instantiating such a reader.
      * @return a suitable {@link ImageMosaicReader}.
      */
@@ -223,8 +213,7 @@ final class TestUtils extends Assert {
         return reader;
     }
 
-    public static File setupTestDirectory(Object caller, URL url, String testDirectoryName)
-            throws IOException {
+    public static File setupTestDirectory(Object caller, URL url, String testDirectoryName) throws IOException {
         File source = URLs.urlToFile(url);
         File directory = new File(TestData.file(caller, "."), testDirectoryName);
         if (directory.exists()) {
@@ -232,5 +221,22 @@ final class TestUtils extends Assert {
         }
         FileUtils.copyDirectory(source, directory);
         return directory;
+    }
+
+    /** Configures logging to show all messages on the console (useful for debugging) */
+    public static void logAll() {
+        // Remove the default handlers
+        Logger rootLogger = Logger.getLogger("");
+        rootLogger.setLevel(Level.ALL);
+        for (var handler : rootLogger.getHandlers()) {
+            rootLogger.removeHandler(handler);
+        }
+
+        // Create and configure a ConsoleHandler
+        ConsoleHandler consoleHandler = new ConsoleHandler();
+        consoleHandler.setLevel(Level.ALL);
+
+        // Add the handler to the root logger
+        rootLogger.addHandler(consoleHandler);
     }
 }

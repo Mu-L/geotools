@@ -63,8 +63,7 @@ public class WMSComplexTypesTest {
         Assert.assertNull(capabilities.getService().getOnlineResource());
 
         Assert.assertEquals(
-                capabilities.getRequest().getGetCapabilities().getFormats().get(0),
-                "application/vnd.ogc.wms_xml");
+                capabilities.getRequest().getGetCapabilities().getFormats().get(0), "application/vnd.ogc.wms_xml");
 
         Layer topLayer = capabilities.getLayerList().get(0);
         Assert.assertNotNull(topLayer);
@@ -110,6 +109,41 @@ public class WMSComplexTypesTest {
         Object legendURL = style.getLegendURLs().get(0);
         // invalid xlink URL will cause most online resources to be null
         Assert.assertNull(legendURL);
+    }
+
+    @Test
+    public void testMissingFormat() throws Exception {
+
+        File getCaps = TestData.file(this, "1.1.0CapabilitiesMissingFormat.xml");
+        URL getCapsURL = getCaps.toURI().toURL();
+        Map<String, Object> hints = new HashMap<>();
+        hints.put(DocumentHandler.DEFAULT_NAMESPACE_HINT_KEY, WMSSchema.getInstance());
+        if (!hints.containsKey(DocumentFactory.VALIDATION_HINT)) {
+            // Removing validation to match WMSGetCapabilitiesResponse behavior
+            hints.put(DocumentFactory.VALIDATION_HINT, Boolean.FALSE);
+        }
+        Object object = DocumentFactory.getInstance(getCapsURL.openStream(), hints, Level.WARNING);
+
+        Assert.assertTrue("Capabilities failed to parse", object instanceof WMSCapabilities);
+
+        WMSCapabilities capabilities = (WMSCapabilities) object;
+
+        Layer topLayer = capabilities.getLayerList().get(0);
+        Assert.assertNotNull(topLayer);
+        Attribution attribution = topLayer.getAttribution();
+        Assert.assertNotNull(attribution);
+        LogoURL logoURL = attribution.getLogoURL();
+        Assert.assertEquals(
+                logoURL.getOnlineResource().toString(), "http://www.osgeo.org/sites/all/themes/osgeo/logo.png");
+        Assert.assertNull(logoURL.getFormat());
+        Assert.assertEquals(logoURL.getHeight(), 100);
+        Assert.assertEquals(logoURL.getHeight(), 100);
+        Assert.assertEquals(logoURL.getWidth(), 100);
+
+        StyleImpl style = topLayer.getStyles().get(0);
+        Assert.assertNotNull(style);
+        Object legendURL = style.getLegendURLs().get(0);
+        Assert.assertEquals(legendURL, "http://www.example.com/legend.png");
     }
 
     @Test

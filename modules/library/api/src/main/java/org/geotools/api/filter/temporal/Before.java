@@ -10,8 +10,8 @@
 package org.geotools.api.filter.temporal;
 
 /**
- * Filter operator that determines if a temporal object is before another temporal object as defined
- * by the Filter Encoding Specification.
+ * Filter operator that determines if a temporal object is before another temporal object as defined by the Filter
+ * Encoding Specification.
  *
  * <p>The Before operator is defined by ISO 19108 and has the following semantics:
  *
@@ -20,7 +20,7 @@ package org.geotools.api.filter.temporal;
  *     <td>t1,t2</td><td>t1[],t2</td><td>t1,t2[]</td><td>t1[],t2[]</td>
  *   </tr>
  *   <tr>
- *     <td>t1 < t2</td><td>t1.end < t2</td><td>t1 < t2.start</td><td>t1.end < t2.start</td>
+ *     <td>t1 &lt; t2</td><td>t1.end &lt; t2</td><td>t1 &lt; t2.start</td><td>t1.end &lt; t2.start</td>
  *   </tr>
  * </table>
  *

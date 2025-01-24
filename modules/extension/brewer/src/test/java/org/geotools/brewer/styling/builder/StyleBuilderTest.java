@@ -8,6 +8,7 @@ import static org.junit.Assert.assertNull;
 
 import java.awt.Color;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import org.geotools.api.filter.Filter;
 import org.geotools.api.filter.FilterFactory;
@@ -16,9 +17,13 @@ import org.geotools.api.filter.expression.Function;
 import org.geotools.api.filter.expression.Literal;
 import org.geotools.api.style.AnchorPoint;
 import org.geotools.api.style.Description;
+import org.geotools.api.style.ExternalGraphic;
 import org.geotools.api.style.FeatureTypeConstraint;
 import org.geotools.api.style.FeatureTypeStyle;
 import org.geotools.api.style.Fill;
+import org.geotools.api.style.Graphic;
+import org.geotools.api.style.GraphicLegend;
+import org.geotools.api.style.GraphicalSymbol;
 import org.geotools.api.style.Halo;
 import org.geotools.api.style.Rule;
 import org.geotools.api.style.Stroke;
@@ -28,6 +33,8 @@ import org.geotools.api.style.StyledLayerDescriptor;
 import org.geotools.api.style.UserLayer;
 import org.geotools.brewer.styling.filter.expression.ExpressionBuilder;
 import org.geotools.factory.CommonFactoryFinder;
+import org.geotools.util.GrowableInternationalString;
+import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -44,8 +51,7 @@ public class StyleBuilderTest {
         UserLayer layer = sf.createUserLayer();
         layer.setName("layer");
 
-        FeatureTypeConstraint constraint =
-                sf.createFeatureTypeConstraint("Feature", Filter.INCLUDE, null);
+        FeatureTypeConstraint constraint = sf.createFeatureTypeConstraint("Feature", Filter.INCLUDE, null);
 
         layer.layerFeatureConstraints().add(constraint);
 
@@ -60,6 +66,80 @@ public class StyleBuilderTest {
         layer.userStyles().add(style);
 
         sld.layers().add(layer);
+    }
+
+    @Test
+    public void testRuleResetTitle() {
+        StyleFactory sf = CommonFactoryFinder.getStyleFactory(null);
+        Rule rule = sf.createRule();
+        String ruleName = "Rule name";
+        rule.setName(ruleName);
+        String title = "Rule title";
+        rule.getDescription().setTitle(title);
+
+        Style resetStyle = new RuleBuilder().reset(rule).name(ruleName).buildStyle();
+        Rule resetRule = resetStyle.featureTypeStyles().get(0).rules().get(0);
+
+        assertEquals(resetRule.getDescription().getTitle().toString(), title);
+    }
+
+    @Test
+    public void testRuleResetI18nTitle() {
+        StyleFactory sf = CommonFactoryFinder.getStyleFactory(null);
+        Rule rule = sf.createRule();
+        String ruleName = "Rule name";
+        rule.setName(ruleName);
+        GrowableInternationalString title = new GrowableInternationalString();
+        title.add(Locale.ENGLISH, "Title in English");
+        title.add(Locale.FRENCH, "Titre en français");
+        rule.getDescription().setTitle(title);
+
+        Style resetStyle = new RuleBuilder().reset(rule).name(ruleName).buildStyle();
+        Rule resetRule = resetStyle.featureTypeStyles().get(0).rules().get(0);
+
+        assertEquals(
+                rule.getDescription().getTitle().toString(Locale.ENGLISH),
+                resetRule.getDescription().getTitle().toString(Locale.ENGLISH));
+        assertEquals(
+                rule.getDescription().getTitle().toString(Locale.FRENCH),
+                resetRule.getDescription().getTitle().toString(Locale.FRENCH));
+    }
+
+    @Test
+    public void testRuleResetAbstract() {
+        StyleFactory sf = CommonFactoryFinder.getStyleFactory(null);
+        Rule rule = sf.createRule();
+        String ruleName = "Rule name";
+        rule.setName(ruleName);
+        String ruleAbstract = "Rule abstract";
+        rule.getDescription().setAbstract(ruleAbstract);
+
+        Style resetStyle = new RuleBuilder().reset(rule).name(ruleName).buildStyle();
+        Rule resetRule = resetStyle.featureTypeStyles().get(0).rules().get(0);
+
+        assertEquals(resetRule.getDescription().getAbstract().toString(), ruleAbstract);
+    }
+
+    @Test
+    public void testRuleResetI18nAbstract() {
+        StyleFactory sf = CommonFactoryFinder.getStyleFactory(null);
+        Rule rule = sf.createRule();
+        String ruleName = "Rule name";
+        rule.setName(ruleName);
+        GrowableInternationalString ruleAbstract = new GrowableInternationalString();
+        ruleAbstract.add(Locale.ENGLISH, "Abstract");
+        ruleAbstract.add(Locale.FRENCH, "Résumé");
+        rule.getDescription().setAbstract(ruleAbstract);
+
+        Style resetStyle = new RuleBuilder().reset(rule).name(ruleName).buildStyle();
+        Rule resetRule = resetStyle.featureTypeStyles().get(0).rules().get(0);
+
+        assertEquals(
+                rule.getDescription().getAbstract().toString(Locale.ENGLISH),
+                resetRule.getDescription().getAbstract().toString(Locale.ENGLISH));
+        assertEquals(
+                rule.getDescription().getAbstract().toString(Locale.FRENCH),
+                resetRule.getDescription().getAbstract().toString(Locale.FRENCH));
     }
 
     @Test
@@ -82,13 +162,12 @@ public class StyleBuilderTest {
     public void ftsOptions() {
         StyleBuilder builder = new StyleBuilder();
 
-        RuleBuilder rule =
-                builder.featureTypeStyle()
-                        .featureTypeName("Feature")
-                        .option(
-                                org.geotools.api.style.FeatureTypeStyle.KEY_EVALUATION_MODE,
-                                org.geotools.api.style.FeatureTypeStyle.VALUE_EVALUATION_MODE_FIRST)
-                        .rule();
+        RuleBuilder rule = builder.featureTypeStyle()
+                .featureTypeName("Feature")
+                .option(
+                        org.geotools.api.style.FeatureTypeStyle.KEY_EVALUATION_MODE,
+                        org.geotools.api.style.FeatureTypeStyle.VALUE_EVALUATION_MODE_FIRST)
+                .rule();
         rule.point().graphic().mark().name("circle");
 
         Style style = builder.build();
@@ -106,9 +185,7 @@ public class StyleBuilderTest {
         StyleBuilder builder = new StyleBuilder();
 
         // don't have a RT handy, we'll just use a random function instead
-        builder.featureTypeStyle()
-                .featureTypeName("Feature")
-                .transformation(FF.function("abs", FF.literal("123")));
+        builder.featureTypeStyle().featureTypeName("Feature").transformation(FF.function("abs", FF.literal("123")));
 
         Style style = builder.build();
 
@@ -323,6 +400,35 @@ public class StyleBuilderTest {
         assertNotNull(b.reset().build());
     }
 
+    /**
+     * Testing if the ExternalGraphic within LegendGraphic is kept after a call to RuleBuilder.reset(Rule)
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testRuleBuilderWithLegendGraphicClone() throws Exception {
+        org.geotools.styling.StyleBuilder builder = new org.geotools.styling.StyleBuilder();
+        Graphic pointGraphic = builder.createGraphic(
+                builder.createExternalGraphic("file:/point-symbolizer.png", "image/png"), null, null);
+        Rule rule = builder.createRule(builder.createPointSymbolizer(pointGraphic));
+
+        Graphic legendGraphic =
+                builder.createGraphic(builder.createExternalGraphic("file:/nice-legend.png", "image/png"), null, null);
+
+        rule.setLegend((GraphicLegend) legendGraphic);
+
+        RuleBuilder rb = new RuleBuilder();
+        Rule cloneRule = rb.reset(rule).build();
+        Assert.assertEquals(1, cloneRule.getLegend().graphicalSymbols().size());
+        GraphicalSymbol symbol = cloneRule.getLegend().graphicalSymbols().get(0);
+        Assert.assertTrue(symbol instanceof ExternalGraphic);
+        ExternalGraphic cloneExternal = (ExternalGraphic) symbol;
+        Assert.assertNotNull(cloneExternal.getLocation());
+        Assert.assertEquals(
+                "file:/nice-legend.png",
+                cloneExternal.getOnlineResource().getLinkage().toString());
+    }
+
     @Test
     public void testSelectedChannelTypeBuilder() {
         SelectedChannelTypeBuilder b = new SelectedChannelTypeBuilder();
@@ -457,11 +563,10 @@ public class StyleBuilderTest {
     @Test
     public void testRuleOptions() {
         StyleBuilder sb = new StyleBuilder();
-        RuleBuilder ruleBuilder =
-                sb.featureTypeStyle()
-                        .rule()
-                        .option("RuleOption", "RuleOptionValue")
-                        .option("RuleOption2", "RuleOptionValue2");
+        RuleBuilder ruleBuilder = sb.featureTypeStyle()
+                .rule()
+                .option("RuleOption", "RuleOptionValue")
+                .option("RuleOption2", "RuleOptionValue2");
         Rule rule = ruleBuilder.build();
         Map<String, String> options = rule.getOptions();
         assertEquals("RuleOptionValue", options.get("RuleOption"));
